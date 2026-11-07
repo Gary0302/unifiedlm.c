@@ -4,7 +4,8 @@ Applies scripts/reports/phase2-protocol.md to finished screening runs. Run from 
 $ python3 scripts/select_phase2.py 2a RUNS_DIR    # prints the phase 2b plan file
 $ python3 scripts/select_phase2.py 2b RUNS_DIR    # prints the frozen choices for phase 3
 
-RUNS_DIR holds one directory per run, named as in the plan file, each with train.log. Standard library only.
+An optional third argument, a comma-separated list such as s,d,a, restricts it to those configs; the
+P-eq split is then chosen only among the P-eq configs listed. RUNS_DIR holds one directory per run, named as in the plan file, each with train.log. Standard library only.
 """
 import math
 import os
@@ -47,9 +48,9 @@ def run(runs, config, lr, tag):
     return final, stable
 
 
-def plan_2b(runs):
+def plan_2b(runs, configs):
     plan2a = {l.split(" ", 1)[0]: l.split(" ", 1)[1].strip() for l in open("scripts/nrp/phase2a.txt") if l.strip()}
-    for config in CONFIGS:
+    for config in configs:
         res = {lr: run(runs, config, lr, "2a") for lr in LRS}
         stable = [lr for lr in LRS if res[lr][1]]
         others = sorted((lr for lr in stable if lr != "1e-3"), key=lambda lr: res[lr][0])
@@ -66,18 +67,19 @@ def plan_2b(runs):
             print(f"{config}_lr{lr} {flags}")
 
 
-def freeze(runs):
+def freeze(runs, configs):
     chosen = {}
-    for config in CONFIGS:
+    for config in configs:
         res = {lr: run(runs, config, lr, "2b")[0] for lr in LRS
                if os.path.exists(os.path.join(runs, f"{config}_lr{lr}", "train.log"))}
         best = min(res, key=res.get)
         lr = "1e-3" if "1e-3" in res and res["1e-3"] <= res[best] + 0.01 else best
         chosen[config] = (lr, res[lr])
-    peq = min(PEQ, key=lambda c: chosen[c][1])
-    for config in ["s", "d", "pfree", peq, "a"]:
+    peq = [min((c for c in PEQ if c in chosen), key=lambda c: chosen[c][1])] if any(c in chosen for c in PEQ) else []
+    for config in [c for c in ["s", "d", "pfree"] if c in chosen] + peq + [c for c in ["a"] if c in chosen]:
         print(f"{config} lr={chosen[config][0]} 20K val {chosen[config][1]:.4f}")
 
 
 if __name__ == "__main__":
-    {"2a": plan_2b, "2b": freeze}[sys.argv[1]](sys.argv[2])
+    configs = sys.argv[3].split(",") if len(sys.argv) > 3 else CONFIGS
+    {"2a": plan_2b, "2b": freeze}[sys.argv[1]](sys.argv[2], configs)
