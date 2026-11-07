@@ -52,3 +52,11 @@ preflight-2-diag_log_rate.txt, 48 calls (6 models x 2 decay rates x 4 layers).
 - Training mode only (bf16 compiled): all 54 pass; worst variant/S ratio is 1.08.
 - Kernel error over control, relative to the same quantity for S: all 54 pass; worst 1.069, P(474,474) fp32.
 - As written: 2 fail, both bf16 eager, both with the control as far off as the kernel.
+
+## What ran overnight (decided by Claude while Gary slept, after he asked for the work to continue)
+
+The gate failed for two configurations only. Every other configuration passed all three rules in all three
+modes, so training was limited to those: phase 0 (S) and phase 2a for S, D, P(69,140), P(105,70) and A.
+The six 2a lines of P(140,140) and P(93,93) are held by hand-made claims in
+/workspace/runs/phase2a/.claims, which say why; removing them releases the lines. Nothing about the gate or
+the protocol was changed. Job ulm-night-bb7cacac, source bb7caca: s_short, then 2a, then s_full.
