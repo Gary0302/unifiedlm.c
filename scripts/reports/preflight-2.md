@@ -33,4 +33,22 @@ in preflight 1 with the same code.
 Hypothesis: d/dg in _bwd_stats_kernel is sum_t t (q dqf - k dk + ...). dqf and dk are built from bf16 q and k,
 but are paired with fp32 q and k in that sum, so the rounding difference survives weighted by absolute
 position t instead of cancelling to (t - s). scripts/diag_log_rate.py tests this at operator level, with
-scripts/kernel_dgfix.py as a diagnosis-only copy that pairs them consistently. Results: see below.
+scripts/kernel_dgfix.py as a diagnosis-only copy that pairs them consistently. Raw output:
+preflight-2-diag_log_rate.txt, 48 calls (6 models x 2 decay rates x 4 layers).
+
+- The formula itself is right: in float64 it matches autograd to 1e-14.
+- The hypothesis explains only part of it. Simulating bf16 inputs reproduces the kernel's error in some calls
+  (P(105,70) rate=test layer 2: simulated 1.38e-1, kernel 1.24e-1, fix 2.0e-2) but not in most, and the fix
+  does not lower the error in general: median absolute dg error 3.8e-4 for both, max 1.5e-3 and 1.2e-3.
+  The kernel also rounds the in-chunk weights and the chunk state to bf16 (_la), which the simulation omits.
+- What the data do show: the absolute dg error is roughly fixed, about 1e-4 to 1.5e-3 per layer, whatever dg
+  is. Relative error is large only where a layer's dg is small: dg 1.3e-3 gives 12%, dg 0.35 gives 7e-5.
+  At the decay rate training starts from, every layer with |dg| above 0.08 is below 5.1e-3.
+- So log_rate gets a small, roughly constant additive error on its gradient. It is not specific to any variant.
+  kernel_dgfix.py is not a fix and is not proposed.
+
+## Rule 3 under other readings (for Gary; the gate was not changed)
+
+- Training mode only (bf16 compiled): all 54 pass; worst variant/S ratio is 1.08.
+- Kernel error over control, relative to the same quantity for S: all 54 pass; worst 1.069, P(474,474) fp32.
+- As written: 2 fail, both bf16 eager, both with the control as far off as the kernel.
