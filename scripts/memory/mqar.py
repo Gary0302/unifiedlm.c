@@ -169,12 +169,12 @@ def main():
     amp = torch.autocast("cuda", dtype=torch.bfloat16) if cuda else torch.autocast("cpu", enabled=False)
     print(f"model {a.model} d={a.dim} m={m} params {params:,} device {dev}", flush=True)
 
-    def loss_acc(x, y):
+    def loss_acc(x, y, N):
+        pos = torch.arange(2 * N, 4 * N, 2, device=dev)  # the query positions, known in advance: no host sync
         with amp:
             h = fwd(x)
-            sel = y != -1
-            logits = net.output(h[sel]).float()
-        t = y[sel]
+            logits = net.output(h[:, pos]).float().flatten(0, 1)
+        t = y[:, pos].flatten()
         return F.cross_entropy(logits, t), (logits.argmax(-1) == t).float().mean()
 
     @torch.no_grad()
@@ -183,7 +183,7 @@ def main():
         out = {}
         for N in counts:
             g = torch.Generator(device=dev).manual_seed({"val": 1, "test": 2}[split] * 100003 + N)
-            accs = [loss_acc(*m1_batch(a.batch, N, a.seq, a.vocab, g, dev))[1].item()
+            accs = [loss_acc(*m1_batch(a.batch, N, a.seq, a.vocab, g, dev), N)[1].item()
                     for _ in range(max(1, a.eval_size // a.batch))]
             out[N] = sum(accs) / len(accs)
         net.train()
@@ -205,7 +205,8 @@ def main():
             a.lr * 0.5 * (1 + math.cos(math.pi * (step - a.warmup) / (a.steps - a.warmup)))
         for group in opt.param_groups:
             group["lr"] = lr
-        loss, acc = loss_acc(*m1_batch(a.batch, counts[step % len(counts)], a.seq, a.vocab, g, dev))
+        N = counts[step % len(counts)]
+        loss, acc = loss_acc(*m1_batch(a.batch, N, a.seq, a.vocab, g, dev), N)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
         opt.step()
