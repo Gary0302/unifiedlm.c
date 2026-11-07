@@ -26,6 +26,9 @@ spec:
         args:
         - |
           set -euo pipefail
+          # Triton builds its CUDA runtime helper with a C compiler at first use
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc libc6-dev > /dev/null
           tar -C /opt/ulm -xf /workspace/env/venv-__LOCK__.tar
           mkdir -p /scratch/data
           cp -r /workspace/data/tok512 /scratch/data/
