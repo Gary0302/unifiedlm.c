@@ -32,3 +32,6 @@ Phase 3 does not start until Gary has seen the frozen choices and the measured c
 2e-3, the top of the grid, won in every config. To inform Gary's decision, not to change the rules above:
 s_full at 2e-3 (100K iters, warmup 1000) and 4e-3 at the 2a and 2b budgets for the five configs that ran.
 The interim freeze stays as the rules above give it; whether to extend the grid is Gary's call.
+
+Second exploratory addition (2026-11-07, before its results; explore2.txt, runs under runs/explore2): 4e-3 also
+won everywhere, so 8e-3 at the 2b budget for the same five configs, and s_full at 4e-3. Same status as above.
