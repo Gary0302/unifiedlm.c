@@ -24,8 +24,18 @@ Control: the dense definition at the same precision, with no Triton.
 - The largest single figure, log_eps_s 2.61e+01 for P(105,70) at T=200, was not reproduced by the diagnostic, whose worst value for it there is 2.50e-2. The two runs drew different tokens. Its gradient does not pass through the kernel directly.
 - test_all.py::test_kernel passes because it only checks fp32, 2 layers, T=200.
 
-## Proposed amended gate, not adopted without Gary's approval
+## Amended gate, approved by Gary on 2026-11-07 after seeing these results
 
 1. Whole-gradient relative error at most 1e-2 in every mode, and in bf16 within 10% of the same-precision dense control.
 2. Per-group relative error at most 1e-2 above the control's, only for groups holding at least 0.1% of the total norm, with log_rate reported separately.
 3. Variants no worse than S at the same shape, by the same measures.
+
+The original failures stay on record in preflight-1-check_kernel.txt. This gate was written after seeing them.
+
+Choices made when implementing it, fixed before the rerun:
+
+- Rule 3 is gated on whole-gradient error at 1.10 x S. Per-parameter excess over the control sits near zero and can be negative, so a ratio on it means nothing; it is printed beside S's, and rule 2 is its only hard limit.
+- log_rate is printed for every case and gated by nothing. Its kernel-specific error remains unexplained.
+- The control runs in the same compile mode as the kernel.
+
+Gap found in the first run: from `D d=288 T=256` on, torch.compile hit its recompile limit and the "compiled" results equal the eager ones to every printed digit, so those cases probably never ran compiled. The check now resets the compiler for every case.
