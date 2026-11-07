@@ -10,7 +10,7 @@ import json
 import os
 import sys
 
-MODELS, DIMS, LRS = ["S", "P", "T"], [64, 128, 256], ["3e-4", "1e-3", "3e-3", "1e-2"]
+MODELS, DIMS, LRS = ["S", "P", "T"], [32, 64, 128], ["3e-4", "1e-3", "3e-3", "1e-2"]
 EDGE = {"3e-4": "1e-4", "1e-2": "3e-2"}
 SEEDS = [2001, 2002, 2003]
 
