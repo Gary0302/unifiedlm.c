@@ -60,3 +60,10 @@ modes, so training was limited to those: phase 0 (S) and phase 2a for S, D, P(69
 The six 2a lines of P(140,140) and P(93,93) are held by hand-made claims in
 /workspace/runs/phase2a/.claims, which say why; removing them releases the lines. Nothing about the gate or
 the protocol was changed. Job ulm-night-bb7cacac, source bb7caca: s_short, then 2a, then s_full.
+
+## Gary's decision (2026-11-07, after reading the readings above)
+
+Rule 3 becomes the second reading: a variant's kernel-over-control ratio at most 1.10 x S's. check_kernel.py
+now gates on it. Applied to preflight-2-check_kernel.txt, all 54 cases pass, worst 1.069 (P(474,474) fp32);
+the GPU check was not rerun, since the inputs are fixed and the printed figures suffice. This is the second
+change made after seeing results; it is final. P(140,140) and P(93,93) are released.

@@ -10,9 +10,9 @@ RUNS_DIR holds <arm>_seed<k>/eval.json; the score is eval.json's fp32 "nll" (low
 - n: S standard deviation at most 0.0011 gives 3 seeds, at most 0.0014 gives 4, otherwise 5. Not extended later.
 - Win: Welch 95% CI of the difference excludes 0 and |difference| is at least 0.005 nats.
 - Equivalent: the Welch 90% CI lies inside +-0.005.
-- Anything else is inconclusive. The plan says "unification holds" needs every relevant comparison to pass;
-  what "pass" means per comparison was not written down. This script reads it as "the first arm is better or
-  equivalent", and that reading needs Gary's confirmation before phase 3 results are seen.
+- Anything else is inconclusive and never passes. Two claims are judged separately (Gary, 2026-11-07):
+  sharing does not hurt (D vs P-free, D vs best P-eq, S vs best separated, each better or equivalent) and
+  coupling helps (S vs D, better).
 """
 import glob
 import json
@@ -106,14 +106,15 @@ def compare(runs, peq):
             ("d", "pfree", "D vs P-free: what releasing the shared address gains"),
             ("d", peq, "D vs best P-eq: shared against separate address at equal params"),
             ("s", best_sep, f"S vs best separated ({best_sep}): the package within this family")]
-    holds = True
+    verdicts = {}
     for first, second, what in plan:
         v, detail = verdict(arms[first], arms[second])
-        ok = v in ("first better", "equivalent")
-        holds &= ok
+        verdicts[(first, second)] = v
         print(f"{what}\n  {first} - {second}: {v} ({detail})")
-    print(f"unification holds: {'yes' if holds else 'no'} "
-          "(reading 'every comparison better or equivalent', to be confirmed by Gary)")
+    sharing = all(verdicts[k] in ("first better", "equivalent") for k in [("d", "pfree"), ("d", peq), ("s", best_sep)])
+    coupling = verdicts[("s", "d")] == "first better"
+    print(f"sharing does not hurt: {'yes' if sharing else 'no'} (three comparisons, each better or equivalent)")
+    print(f"coupling helps: {'yes' if coupling else 'no'} (S better than D)")
 
 
 if __name__ == "__main__":

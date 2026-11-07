@@ -35,3 +35,28 @@ The interim freeze stays as the rules above give it; whether to extend the grid 
 
 Second exploratory addition (2026-11-07, before its results; explore2.txt, runs under runs/explore2): 4e-3 also
 won everywhere, so 8e-3 at the 2b budget for the same five configs, and s_full at 4e-3. Same status as above.
+
+## Phase 2c, adopted by Gary on 2026-11-07, written before any 2c result
+
+The LR grid moves up because its top won everywhere. This replaces the 2b LR rule ("1e-3 if within 0.01");
+the 2b runs stay as data points.
+
+- P(140,140) and P(93,93) first run their 2a lines, as the other configs did.
+- Every config is scored at the 2b budget (20K iters, warmup 200, seed 1337) at 1e-3, 2e-3, 4e-3 and 8e-3.
+  Runs that already exist with exactly these flags are reused: phase2b/<c>_lr1e-3 and _lr2e-3, and
+  explore/<c>_20k_lr4e-3.
+- Unstable means a non-finite logged loss or a final val loss more than 0.02 above the run's minimum.
+- While a config's lowest final val loss among its stable LRs is at its highest tested LR, its next doubling
+  is run. A config stops once its best LR is not the highest tested.
+- LR per config: the stable LR with the lowest 20K final val loss. P-eq split: the lowest among the three
+  P-eq configs at their chosen LRs.
+- Check before phase 3: S at its chosen LR for 100K iters (s_full recipe). If it is worse than S at 2e-3 over
+  100K (val 1.2716) by more than 0.005, stop and report.
+- Frozen choices and cost go to Gary before phase 3.
+- The exploratory Job ulm-explore2-3f0c7a25 (8e-3 for five configs, s_full at 4e-3) was deleted unrun.
+
+## Decision rule per comparison, adopted by Gary on 2026-11-07, before any phase 3 result
+
+Two claims, judged separately; inconclusive never passes.
+- Sharing does not hurt: D vs P-free, D vs best P-eq and S vs best separated must each be better or equivalent.
+- Coupling helps: S vs D must be better.

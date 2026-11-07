@@ -11,8 +11,9 @@ dense definition at the same precision and in the same compile mode, with no Tri
 1. Loss and whole-gradient relative error at most TOL; in bf16, whole-gradient error at most 1.10 x the control's.
 2. In each parameter holding at least 0.1% of the total gradient norm, error at most TOL above the control's.
    log_rate is left out of this and printed on its own, with its known kernel-specific error.
-3. Whole-gradient error of a variant at most 1.10 x that of S at the same d, T and mode.
-   Per-parameter excess is printed for comparison but not gated by ratio, since it sits near zero and can be negative.
+3. A variant's whole-gradient error over its control's, at most 1.10 x the same ratio for S at the same d, T and
+   mode (adopted by Gary after preflight 2, where the raw ratio failed two bf16 eager cases whose control was
+   just as far off). Per-parameter excess is printed for comparison but not gated by ratio.
 """
 import copy
 import math
@@ -140,7 +141,7 @@ if __name__ == "__main__":
             r = check(config, dtype, compiled)
             shape = (config[3], config[5], dtype, compiled)
             if config[0] == "S":
-                yardstick[shape] = r["whole"]
+                yardstick[shape] = r["whole"] / r["whole_ctrl"]
             why = []
             if r["loss"] > TOL:
                 why.append("loss")
@@ -150,12 +151,12 @@ if __name__ == "__main__":
                 why.append("control")
             if r["excess"][0] > TOL:
                 why.append("group")
-            if r["whole"] > MARGIN * yardstick[shape]:
+            if r["whole"] / r["whole_ctrl"] > MARGIN * yardstick[shape]:
                 why.append("vs_S")
             failed += bool(why)
             print(f"{'ok  ' if not why else 'FAIL ' + ','.join(why)} {config[0]} m_s={config[1]:<5} m_f={config[2]:<5} d={config[3]:<4} T={config[5]:<4} "
                   f"{str(dtype).split('.')[-1]:<8} compiled={compiled!s:<5} "
-                  f"whole {r['whole']:.2e} ctrl {r['whole_ctrl']:.2e} S {yardstick[shape]:.2e} cos {r['cosine']:.6f} loss {r['loss']:.2e} "
+                  f"whole {r['whole']:.2e} ctrl {r['whole_ctrl']:.2e} ratio/S {r['whole'] / r['whole_ctrl'] / yardstick[shape]:.3f} cos {r['cosine']:.6f} loss {r['loss']:.2e} "
                   f"excess {r['excess'][0]:.2e} ({r['excess'][1]}) "
                   f"log_rate {r['log_rate'][0]:.2e} ctrl {r['log_rate'][1]:.2e} share {r['log_rate'][2]:.1e} "
                   f"raw {r['raw'][0]:.2e} ({r['raw'][1]}, share {r['raw'][2]:.1e})", flush=True)
