@@ -26,3 +26,9 @@ the two stable LRs. If only one LR is stable, 2b runs that one.
 - Frozen for phase 3: S, D, P-free, the chosen P-eq, A, each at its chosen LR.
 
 Phase 3 does not start until Gary has seen the frozen choices and the measured cost.
+
+## Exploratory addition (2026-11-07, before its results; plan file explore.txt, runs under runs/explore)
+
+2e-3, the top of the grid, won in every config. To inform Gary's decision, not to change the rules above:
+s_full at 2e-3 (100K iters, warmup 1000) and 4e-3 at the 2a and 2b budgets for the five configs that ran.
+The interim freeze stays as the rules above give it; whether to extend the grid is Gary's call.
