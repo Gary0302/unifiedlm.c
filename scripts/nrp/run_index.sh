@@ -14,6 +14,7 @@ if [ -e "$OUT/eval.json" ]; then
 fi
 
 LOCAL=/scratch/out
+rm -rf "$LOCAL"  # a pod may run several plan lines; start each from an empty directory
 mkdir -p "$LOCAL" "$(dirname "$OUT")"
 nvidia-smi -L || true
 nvidia-smi --query-gpu=timestamp,utilization.gpu,memory.used --format=csv,noheader -l 60 > "$LOCAL/gpu.csv" &
