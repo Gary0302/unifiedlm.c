@@ -8,8 +8,13 @@
 //   S-lazy     S = a H with a scalar a, H += v k^T / a, rescaled when a gets small (one address)
 //   S-fused    S-split with the static read and the fast update and read in one pass over mu and S,
 //              the same memory traffic as S-merged; S-fused-lazy is the same with the lazy decay
-//   P          y = mu r_s + S_f q_f with its own address for each path (eager or lazy fast state)
+//   P          y = mu r_s + S_f q_f with its own address for each path (eager or lazy fast state);
+//              P-free-fused reads mu and S_f in one pass like S-fused, so S-fused vs P-free-fused differ
+//              only in the second address
 //   A          alternating layers: fast-only, static-only
+//
+// Each scale then times the whole model for one token: every block with its RMSNorm, conv, value
+// projection and residual, plus the final RMSNorm and the output head.
 //
 // $ cc -O3 -ffast-math -mcpu=native -o mixer_bench scripts/bench/mixer_bench.c && ./mixer_bench
 // -ffast-math lets the compiler vectorize the float reductions; without it every layout is scalar-bound.
@@ -77,9 +82,9 @@ static void step(Layer *L, const float *u, const float *v, float *y, int d, floa
             }
             y[i] = yi;
         }
-    } else if (L->fused) {  // S only: one pass over mu and S per row
+    } else if (L->fused) {  // one pass over mu and S per row; needs m_s == m_f. Static read mu (q w) for S, mu r_s for P
         float qw[4096];
-        for (int a = 0; a < m_f; a++) qw[a] = L->q[a] * L->w[a];
+        for (int a = 0; a < m_f; a++) qw[a] = L->shared ? L->q[a] * L->w[a] : L->rs[a];
         float sc = 1.0f, inv = 1.0f;
         if (L->lazy) { L->scale *= lam; sc = L->scale; inv = 1.0f / sc; }
         for (int i = 0; i < d; i++) {
@@ -133,50 +138,110 @@ static void step(Layer *L, const float *u, const float *v, float *y, int d, floa
 
 typedef struct { const char *name; int m_s, m_f, shared, merged, lazy, alternate, fused; } Cfg;
 
-static double run(int d, int n_layers, Cfg c) {
+typedef struct { float *nw, *conv, *cbuf, *Wv; } Shell;  // the parts every layout has: norm, conv, value
+
+static void rmsnorm(float *o, const float *x, const float *w, int d) {
+    float ss = 0;
+    for (int i = 0; i < d; i++) ss += x[i] * x[i];
+    ss = 1.0f / sqrtf(ss / d + 1e-5f);
+    for (int i = 0; i < d; i++) o[i] = x[i] * ss * w[i];
+}
+
+// One whole block as run.c computes it: RMSNorm, causal depthwise conv (width 4), value projection
+// (only for layers with a fast path), the mixer, residual add.
+static void block(Layer *L, Shell *B, float *x, float *h, float *u, float *v, float *y, int d, float lam) {
+    rmsnorm(h, x, B->nw, d);
+    for (int i = 0; i < d; i++) {
+        float *st = B->cbuf + i * 3, s = B->conv[i * 4 + 3] * h[i];
+        for (int j = 0; j < 3; j++) s += B->conv[i * 4 + j] * st[j];
+        st[0] = st[1]; st[1] = st[2]; st[2] = h[i];
+        u[i] = s;
+    }
+    if (L->m_f) matvec(B->Wv, h, v, d, d);
+    step(L, u, v, y, d, lam);
+    for (int i = 0; i < d; i++) x[i] += y[i];
+}
+
+// vocab = 0 times the mixer only; vocab > 0 times the whole model for one token: every block plus the
+// final RMSNorm and the output head (the embedding lookup is a copy and is left out).
+static double run(int d, int n_layers, Cfg c, int vocab) {
     Layer *Ls = malloc(n_layers * sizeof(Layer));
+    Shell *Bs = malloc(n_layers * sizeof(Shell));
     for (int l = 0; l < n_layers; l++) {
         if (c.alternate) Ls[l] = l % 2 == 0 ? make(d, 0, c.m_f, 0, 0, c.lazy, 0) : make(d, c.m_s, 0, 0, 0, 0, 0);
         else Ls[l] = make(d, c.m_s, c.m_f, c.shared, c.merged, c.lazy, c.fused);
+        Bs[l] = (Shell){buf(d), buf((size_t)d * 4), buf((size_t)d * 3), Ls[l].m_f ? buf((size_t)d * d) : NULL};
+        for (int i = 0; i < d; i++) Bs[l].nw[i] = 1.0f;
     }
-    float *u = buf(d), *v = buf(d), *y = buf(d);
+    float *u = buf(d), *v = buf(d), *y = buf(d), *x = buf(d), *h = buf(d), *emb = buf(d), *fw = buf(d);
+    float *head = vocab ? buf((size_t)vocab * d) : NULL, *logits = vocab ? buf(vocab) : NULL;
     float lam = 0.999f;
     int tokens = 0;
     struct timespec t0, t1;
-    for (int warm = 0; warm < 20; warm++) for (int l = 0; l < n_layers; l++) step(&Ls[l], u, v, y, d, lam);
-    clock_gettime(CLOCK_MONOTONIC, &t0);
     double el = 0;
-    while (el < 1.5) {
-        for (int k = 0; k < 20; k++, tokens++)
-            for (int l = 0; l < n_layers; l++) { step(&Ls[l], u, v, y, d, lam); u[l % d] += y[0] * 1e-6f; }
-        clock_gettime(CLOCK_MONOTONIC, &t1);
-        el = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) * 1e-9;
+    for (int pass = 0; pass < 2; pass++) {  // pass 0 warms up, pass 1 is timed
+        tokens = 0; el = 0;
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        while (el < (pass ? 1.5 : 0.1)) {
+            for (int k = 0; k < 20; k++, tokens++) {
+                if (vocab) {
+                    memcpy(x, emb, d * sizeof(float));
+                    for (int l = 0; l < n_layers; l++) block(&Ls[l], &Bs[l], x, h, u, v, y, d, lam);
+                    rmsnorm(h, x, fw, d);
+                    matvec(head, h, logits, vocab, d);
+                    emb[tokens % d] += logits[0] * 1e-6f;
+                } else {
+                    for (int l = 0; l < n_layers; l++) { step(&Ls[l], u, v, y, d, lam); u[l % d] += y[0] * 1e-6f; }
+                }
+            }
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            el = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) * 1e-9;
+        }
     }
-    if (y[0] == 12345.f) printf("!");
+    if (y[0] == 12345.f || (vocab && logits[0] == 12345.f)) printf("!");
+    for (int l = 0; l < n_layers; l++) {  // the larger scales would otherwise hold gigabytes across runs
+        Layer *L = &Ls[l];
+        float *ps[] = {L->Ks, L->Kf, L->mu, L->S, L->w, L->c, L->rs, L->rf, L->rprev, L->q,
+                       Bs[l].nw, Bs[l].conv, Bs[l].cbuf, Bs[l].Wv};
+        for (int k = 0; k < 14; k++) free(ps[k]);
+    }
+    free(Ls); free(Bs); free(u); free(v); free(y); free(x); free(h); free(emb); free(fw); free(head); free(logits);
     return el / tokens * 1e6;  // microseconds per token, all layers
 }
 
 int main(void) {
-    struct { const char *name; int d, n_layers, m; Cfg extra[6]; } scales[] = {
-        {"260K", 64, 10, 140, {{"P-free", 140, 140}, {"P(69,140)", 69, 140}, {"P(93,93)", 93, 93}, {"P(105,70)", 105, 70}, {"A(207,207)", 207, 207, 0, 0, 0, 1}}},
-        {"15M", 288, 12, 712, {{"P-free", 712, 712}, {"P(355,712)", 355, 712}, {"P(474,474)", 474, 474}, {"P(534,356)", 534, 356}, {"A(1045,1045)", 1045, 1045, 0, 0, 0, 1}}},
-        {"42M", 512, 16, 1280, {{"P-free", 1280, 1280}}},
-        {"110M", 768, 24, 1912, {{"P-free", 1912, 1912}}},
+    struct { const char *name; int d, n_layers, m, vocab; Cfg extra[6]; } scales[] = {
+        {"260K", 64, 10, 140, 512, {{"P-free", 140, 140}, {"P(69,140)", 69, 140}, {"P(93,93)", 93, 93}, {"P(105,70)", 105, 70}, {"A(207,207)", 207, 207, 0, 0, 0, 1}}},
+        {"15M", 288, 12, 712, 32000, {{"P-free", 712, 712}, {"P(355,712)", 355, 712}, {"P(474,474)", 474, 474}, {"P(534,356)", 534, 356}, {"A(1045,1045)", 1045, 1045, 0, 0, 0, 1}}},
+        {"42M", 512, 16, 1280, 32000, {{"P-free", 1280, 1280}}},
+        {"110M", 768, 24, 1912, 32000, {{"P-free", 1912, 1912}}},
     };
     for (int s = 0; s < 4; s++) {
-        int d = scales[s].d, nl = scales[s].n_layers, m = scales[s].m;
-        double base = run(d, nl, (Cfg){"S-merged", m, m, 1, 1, 0, 0});
-        printf("%-5s d=%d layers=%d m=%d, state %.1f MB\n", scales[s].name, d, nl, m, (double)d * m * nl * 4 / 1e6);
+        int d = scales[s].d, nl = scales[s].n_layers, m = scales[s].m, V = scales[s].vocab;
+        double base = run(d, nl, (Cfg){"S-merged", m, m, 1, 1, 0, 0}, 0);
+        printf("%-5s d=%d layers=%d m=%d vocab=%d, state %.1f MB\n", scales[s].name, d, nl, m, V, (double)d * m * nl * 4 / 1e6);
         printf("  %-14s %9.1f us/token  1.00x\n", "S-merged", base);
         Cfg base_cfgs[] = {{"S-split", m, m, 1, 0, 0}, {"S-lazy", m, m, 1, 0, 1}, {"S-fused", m, m, 1, 0, 0, 0, 1},
-                           {"S-fused-lazy", m, m, 1, 0, 1, 0, 1}};
-        for (int k = 0; k < 4; k++) { double t = run(d, nl, base_cfgs[k]); printf("  %-14s %9.1f us/token  %.2fx\n", base_cfgs[k].name, t, t / base); }
+                           {"S-fused-lazy", m, m, 1, 0, 1, 0, 1}, {"P-free-fused", m, m, 0, 0, 0, 0, 1}};
+        for (int k = 0; k < 5; k++) { double t = run(d, nl, base_cfgs[k], 0); printf("  %-14s %9.1f us/token  %.2fx\n", base_cfgs[k].name, t, t / base); }
         for (int k = 0; k < 6 && scales[s].extra[k].name; k++) {
             Cfg c = scales[s].extra[k];
-            double t = run(d, nl, c);
+            double t = run(d, nl, c, 0);
             printf("  %-14s %9.1f us/token  %.2fx", c.name, t, t / base);
-            c.lazy = 1; t = run(d, nl, c);
+            c.lazy = 1; t = run(d, nl, c, 0);
             printf("   lazy %9.1f us/token  %.2fx\n", t, t / base);
+        }
+        // whole model, eager fast state: norm, conv, value projection, residual, final norm and head included
+        double wbase = run(d, nl, (Cfg){"S-merged", m, m, 1, 1, 0, 0}, V);
+        printf("  whole model, one token\n");
+        printf("  %-14s %9.1f us/token  1.00x  whole\n", "S-merged", wbase);
+        double t = run(d, nl, (Cfg){"S-fused", m, m, 1, 0, 0, 0, 1}, V);
+        printf("  %-14s %9.1f us/token  %.2fx  whole\n", "S-fused", t, t / wbase);
+        t = run(d, nl, (Cfg){"P-free-fused", m, m, 0, 0, 0, 0, 1}, V);
+        printf("  %-14s %9.1f us/token  %.2fx  whole\n", "P-free-fused", t, t / wbase);
+        for (int k = 0; k < 6 && scales[s].extra[k].name; k++) {
+            t = run(d, nl, scales[s].extra[k], V);
+            printf("  %-14s %9.1f us/token  %.2fx  whole\n", scales[s].extra[k].name, t, t / wbase);
         }
         fflush(stdout);
     }
