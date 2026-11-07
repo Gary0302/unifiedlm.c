@@ -5,9 +5,10 @@ repository root:
 
 $ python scripts/memory/mqar.py --model=S --dim=128 --lr=1e-3 --out_dir=runs/mem/s_d128
 
-  m1  N key-value pairs, then every key again in random order, each followed by its value (MQAR). Keys
-      come from the lower half of the vocabulary, values from the upper half, token 0 pads the sequence.
-      Loss and accuracy count only the positions whose next token is the value after a query.
+  m1  N key-value pairs, then every key again in random order, each followed by a 0 (MQAR, as in Zoology:
+      the answers never appear in the input). Keys come from the lower half of the vocabulary, values from
+      the upper half, token 0 pads the sequence. Loss and accuracy count only the query positions, whose
+      label is the key's value.
 
 Models: S (model.UnifiedLM) and P (separate addresses with m slots each, scripts/variants.py) with 4
 blocks, and T, a llama2.c-style Transformer with 2 layers. One Transformer layer counts as two blocks, and
@@ -124,7 +125,7 @@ def m1_batch(B, N, T, V, g, device):
     qk, qv = keys.gather(1, perm), vals.gather(1, perm)
     x = torch.zeros(B, T, dtype=torch.long, device=device)
     x[:, 0:2 * N:2], x[:, 1:2 * N:2] = keys, vals
-    x[:, 2 * N:4 * N:2], x[:, 2 * N + 1:4 * N:2] = qk, qv
+    x[:, 2 * N:4 * N:2] = qk  # the slot after each query stays 0: answers are never shown in the input
     y = torch.full((B, T), -1, dtype=torch.long, device=device)
     y[:, 2 * N:4 * N:2] = qv
     return x, y
