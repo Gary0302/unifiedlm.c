@@ -22,9 +22,14 @@ SAMPLER=$!
 trap 'kill $SAMPLER 2>/dev/null || true' EXIT
 
 START=$SECONDS
-python scripts/train_variant.py --out_dir="$LOCAL" $FLAGS 2>&1 | tee "$LOCAL/train.log"
-TRAIN_SECONDS=$((SECONDS - START))
-python scripts/eval_nll.py --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"
+if [[ $PLAN == mem* ]]; then  # synthetic memory tasks write their own eval.json
+    python scripts/memory/mqar.py --out_dir="$LOCAL" $FLAGS 2>&1 | tee "$LOCAL/train.log"
+    TRAIN_SECONDS=$((SECONDS - START))
+else
+    python scripts/train_variant.py --out_dir="$LOCAL" $FLAGS 2>&1 | tee "$LOCAL/train.log"
+    TRAIN_SECONDS=$((SECONDS - START))
+    python scripts/eval_nll.py --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"
+fi
 echo "{\"name\": \"$NAME\", \"node\": \"${NODE_NAME:-unknown}\", \"train_seconds\": $TRAIN_SECONDS}" > "$LOCAL/timing.json"
 
 rm -rf "$OUT.tmp"
