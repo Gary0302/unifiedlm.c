@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-own = {"variant": "S", "m_s": 0, "m_f": 0}
+own = {"variant": "S", "m_s": 0, "m_f": 0, "dataset": "tinystories"}
 argv = []
 for arg in sys.argv[1:]:
     key, _, val = arg[2:].partition("=")
@@ -33,6 +33,12 @@ import export    # noqa: E402
 import variants  # noqa: E402
 
 variants.install(own["variant"], own["m_s"], own["m_f"])
+if own["dataset"] == "babylm":  # train.py imports its Task from tinystories
+    sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "babylm"))
+    import babylm  # noqa: E402
+    sys.modules["tinystories"] = babylm
+elif own["dataset"] != "tinystories":
+    raise SystemExit(f"unknown dataset {own['dataset']}")
 export.model_export = lambda *a, **k: None       # the run.c format belongs to the standard model
 
 os.makedirs(out_dir, exist_ok=True)

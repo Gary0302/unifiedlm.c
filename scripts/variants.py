@@ -5,6 +5,7 @@ Ablation variants for the unification experiment. Not part of the standard model
     D  DecoupledBlock              y = mu(r)     + fast(r)    shared address, no attenuation
     P  SeparateBlock(m_s, m_f)     y = mu(r_s)   + fast(r_f)  one address per path, two slot sets
     A  SeparateBlock alternating   y = fast(r_f), then y = mu(r_s)
+    T  llama2.c Transformer        attention with RoPE, then a SwiGLU feed-forward of hidden_dim units, per block pair
 
 fast(r) is unified_memory(r, v, g, w): read address r, write address r shifted by one, normalized by
 c = w + decayed evidence. Variants only train and evaluate; forward_recurrent, export and run.c stay
@@ -75,6 +76,54 @@ class SeparateBlock(nn.Module):
         return x + self.dropout(y)
 
 
+HEAD_DIM = 48  # llama2.c 15M: 6 heads of 48 at dim 288
+
+
+def _rope(x):
+    T, hd = x.size(-2), x.size(-1)
+    inv = 1.0 / (10000 ** (torch.arange(0, hd, 2, device=x.device).float() / hd))
+    ang = torch.outer(torch.arange(T, device=x.device).float(), inv)
+    c, s = ang.cos(), ang.sin()
+    x1, x2 = x[..., 0::2].float(), x[..., 1::2].float()
+    return torch.stack((x1 * c - x2 * s, x1 * s + x2 * c), -1).flatten(-2).type_as(x)
+
+
+class AttentionHalf(nn.Module):
+    """The attention half of a llama2.c layer. The output projection is named mu so that UnifiedLM's init scales
+    it to 0.02/sqrt(n_layers), which with two blocks per layer is GPT-2's scaling of residual projections."""
+
+    def __init__(self, args):
+        super().__init__()
+        d = args.dim
+        self.h = d // HEAD_DIM
+        self.norm = RMSNorm(d, eps=args.norm_eps)
+        self.wq, self.wk, self.wv, self.mu = (nn.Linear(d, d, bias=False) for _ in range(4))
+        self.dropout = nn.Dropout(args.dropout)
+
+    def forward(self, x):
+        B, T, d = x.shape
+        a = self.norm(x)
+        q, k, v = (w(a).view(B, T, self.h, HEAD_DIM).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
+        y = F.scaled_dot_product_attention(_rope(q), _rope(k), v, is_causal=True)
+        return x + self.dropout(self.mu(y.transpose(1, 2).reshape(B, T, d)))
+
+
+class FeedForwardHalf(nn.Module):
+    """The SwiGLU feed-forward half of a llama2.c layer; mu is its output projection (w2 in llama2.c)."""
+
+    def __init__(self, args):
+        super().__init__()
+        d, hidden = args.dim, args.hidden_dim
+        self.norm = RMSNorm(d, eps=args.norm_eps)
+        self.w1, self.w3 = nn.Linear(d, hidden, bias=False), nn.Linear(d, hidden, bias=False)
+        self.mu = nn.Linear(hidden, d, bias=False)
+        self.dropout = nn.Dropout(args.dropout)
+
+    def forward(self, x):
+        f = self.norm(x)
+        return x + self.dropout(self.mu(F.silu(self.w1(f)) * self.w3(f)))
+
+
 def install(variant, m_s=0, m_f=0):
     """UnifiedLM builds its layers through the global model.UnifiedBlock, so swapping it is enough."""
     if variant == "S":
@@ -86,5 +135,8 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "A":
         i = itertools.count()
         model.UnifiedBlock = lambda args: SeparateBlock(args, 0, m_f) if next(i) % 2 == 0 else SeparateBlock(args, m_s, 0)
+    elif variant == "T":
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
     else:
         raise ValueError(variant)

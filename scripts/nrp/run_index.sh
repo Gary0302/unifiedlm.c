@@ -28,7 +28,9 @@ if [[ $PLAN == mem* ]]; then  # synthetic memory tasks write their own eval.json
 else
     python scripts/train_variant.py --out_dir="$LOCAL" $FLAGS 2>&1 | tee "$LOCAL/train.log"
     TRAIN_SECONDS=$((SECONDS - START))
-    python scripts/eval_nll.py --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"
+    EVAL=scripts/eval_nll.py
+    [[ $PLAN == babylm* ]] && EVAL=scripts/babylm/eval_babylm.py
+    python $EVAL --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"
 fi
 echo "{\"name\": \"$NAME\", \"node\": \"${NODE_NAME:-unknown}\", \"train_seconds\": $TRAIN_SECONDS}" > "$LOCAL/timing.json"
 
