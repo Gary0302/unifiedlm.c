@@ -138,7 +138,8 @@ def check(net, kind):
         ref = mqar.Body(net)(x)
         mine, _ = run(net, kind, x, torch.zeros(x.size(1), dtype=torch.bool), "normal")
     err = (ref - mine).abs().max().item()
-    assert err < 1e-4, f"{kind}: token-by-token form differs from the model by {err}"
+    rel = err / ref.abs().max().item()  # relative: fp32 accumulation error grows with the size of the hidden state
+    assert rel < 1e-5, f"{kind}: token-by-token form differs from the model by {err} ({rel:.1e} of the largest value)"
     return err
 
 
