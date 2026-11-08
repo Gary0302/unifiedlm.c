@@ -136,15 +136,24 @@ def m1_batch(B, N, T, V, g, device):
     return x, y, torch.arange(2 * N, 4 * N, 2, device=device), {}
 
 
-def m2_batch(B, N, G, T, V, g, device):
-    """N pairs, G filler tokens, then the N queries. Keys, values and filler use disjoint thirds of the vocabulary."""
+def m2_batch(B, N, G, T, V, g, device, filler="own"):
+    """N pairs, G filler tokens, then the N queries. Keys, values and filler use disjoint thirds of the vocabulary.
+    filler="kv" draws the filler from the key and value thirds instead (never one of the N keys asked about), so the
+    model cannot tell it apart by token alone and it competes with the pairs for memory."""
     third = V // 3
     keys = torch.rand(B, third - 1, generator=g, device=device).argsort(1)[:, :N] + 1
     vals = torch.randint(third, 2 * third, (B, N), generator=g, device=device)
     perm = torch.rand(B, N, generator=g, device=device).argsort(1)
     x = torch.zeros(B, T, dtype=torch.long, device=device)
     x[:, 0:2 * N:2], x[:, 1:2 * N:2] = keys, vals
-    x[:, 2 * N:2 * N + G] = torch.randint(2 * third, V, (B, G), generator=g, device=device)
+    if filler == "kv":
+        f = torch.randint(1, 2 * third, (B, G), generator=g, device=device)
+        asked = torch.zeros(B, third, dtype=torch.bool, device=device).scatter_(1, keys, True)
+        hit = (f < third) & asked.gather(1, f.clamp(max=third - 1))
+        f = torch.where(hit, torch.randint(third, 2 * third, (B, G), generator=g, device=device), f)
+    else:
+        f = torch.randint(2 * third, V, (B, G), generator=g, device=device)
+    x[:, 2 * N:2 * N + G] = f
     q0 = 2 * N + G
     x[:, q0:q0 + 2 * N:2] = keys.gather(1, perm)
     y = torch.full((B, T), -1, dtype=torch.long, device=device)
@@ -196,6 +205,7 @@ def main():
     ap.add_argument("--compile", type=int, default=1)
     ap.add_argument("--gmax", type=int, default=256, help="m2: training gaps are drawn from 0..gmax")
     ap.add_argument("--gaps", default="0,64,256,1024,4096", help="m2: gaps evaluated")
+    ap.add_argument("--filler", choices=["own", "kv"], default="own", help="m2: filler from its own third, or from keys and values")
     a = ap.parse_args()
     counts = [int(c) for c in a.counts.split(",")]
     gaps = [int(c) for c in a.gaps.split(",")]
@@ -233,7 +243,7 @@ def main():
         if a.task == "m1":
             return m1_batch(B, case, a.seq, a.vocab, g, dev)
         if a.task == "m2":
-            return m2_batch(B, counts[0], case, round_up(4 * counts[0] + case), a.vocab, g, dev)
+            return m2_batch(B, counts[0], case, round_up(4 * counts[0] + case), a.vocab, g, dev, a.filler)
         return m3_batch(B, case, a.seq, a.vocab, g, dev)
 
     cases = gaps if a.task == "m2" else counts
@@ -286,7 +296,7 @@ def main():
             group["lr"] = lr
         case = pick.randint(0, a.gmax) if a.task == "m2" else counts[step % len(counts)]
         if a.task == "m2":  # pad to the fixed training length so the compiled graph keeps one shape
-            x, y, pos, info = m2_batch(a.batch, counts[0], case, a.seq, a.vocab, g, dev)
+            x, y, pos, info = m2_batch(a.batch, counts[0], case, a.seq, a.vocab, g, dev, a.filler)
         else:
             x, y, pos, info = batch(case, a.batch, g)
         loss, acc, _, _ = loss_acc(x, y, pos, info)
@@ -306,7 +316,7 @@ def main():
                 break
     result = {"task": a.task, "model": a.model, "dim": a.dim, "slots": m, "params": params, "lr": a.lr, "seed": a.seed,
               "steps": a.steps, "batch": a.batch, "seq": a.seq, "vocab": a.vocab, "counts": counts, "diverged": diverged,
-              **({"gmax": a.gmax, "gaps": gaps} if a.task == "m2" else {}),
+              **({"gmax": a.gmax, "gaps": gaps, "filler": a.filler} if a.task == "m2" else {}),
               "val": evaluate("val") if diverged else curve[-1][1], "test": evaluate("test"), "val_curve": curve,
               "ms_per_iter": statistics.median(times[1:]) if len(times) > 1 else None,
               "train_seconds": round(time.time() - t0)}
