@@ -349,8 +349,9 @@ seed 0 的「S 的 BLiMP 比 T 高」和「S 跟 P-free 的 loss 打平」都不
 seed 0 的結果在 `babylm/explore/`，seed 1、2 的在 `babylm_seeds/`（`explore_seed*.json`、`context_*.json`），彙整在 `babylm_seeds/explore_summary.json`。
 全部在 Mac 的 CPU 上跑，共約 1.5 小時。
 
-**A. Transformer 超過訓練長度（seed 0）：** 位置 256–512 是 3.155，512–1024 是 4.011，1024–2048 是 4.527，多了 1.37。
-所以在 1024–2048，三個模型是 S 3.319、P-free 4.160、T 4.527，只有 S 撐得住。
+**A. Transformer 超過訓練長度：**
+- seed 0：位置 256–512 是 3.155，512–1024 是 4.011，1024–2048 是 4.527，多了 1.37。seed 1、2 多 1.40、1.26（`babylm_seeds/t_long_seed*.json`）。
+- 所以在 1024–2048，seed 0 的三個模型是 S 3.319、P-free 4.160、T 4.527，只有 S 撐得住。
 
 **B. 同一批 token，上下文變長是幫忙還是拖累？**
 - **做法：**
