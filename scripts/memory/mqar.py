@@ -206,6 +206,7 @@ def main():
     ap.add_argument("--gmax", type=int, default=256, help="m2: training gaps are drawn from 0..gmax")
     ap.add_argument("--gaps", default="0,64,256,1024,4096", help="m2: gaps evaluated")
     ap.add_argument("--filler", choices=["own", "kv"], default="own", help="m2: filler from its own third, or from keys and values")
+    ap.add_argument("--save", type=int, default=0, help="1: also write the trained weights to model.pt")
     a = ap.parse_args()
     counts = [int(c) for c in a.counts.split(",")]
     gaps = [int(c) for c in a.gaps.split(",")]
@@ -322,6 +323,8 @@ def main():
               "train_seconds": round(time.time() - t0)}
     with open(os.path.join(a.out_dir, "eval.json"), "w") as f:
         json.dump(result, f, indent=2)
+    if a.save:
+        torch.save(net.state_dict(), os.path.join(a.out_dir, "model.pt"))
     print("test acc " + (show(result["test"]) if a.task != "m1" else " ".join(f"N{N} {acc:.4f}" for N, acc in result["test"].items())), flush=True)
 
 
