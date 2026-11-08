@@ -9,6 +9,10 @@ $ python scripts/memory/mqar.py --model=S --dim=128 --lr=1e-3 --out_dir=runs/mem
       the answers never appear in the input). Keys come from the lower half of the vocabulary, values from
       the upper half, token 0 pads the sequence. Loss and accuracy count only the query positions, whose
       label is the key's value.
+  m2  distance: the same with G filler tokens between the pairs and the queries (N fixed, --counts=16). Training
+      draws G from 0..gmax; evaluation covers --gaps, beyond gmax too, each at its own sequence length.
+  m3  update: N pairs, then N/2 of the keys again with new values, then every key as a query; the label is the
+      newest value. Reports accuracy on updated and kept keys and how often an updated key gets its old value.
 
 Models: S (model.UnifiedLM) and P (separate addresses with m slots each, scripts/variants.py) with 4
 blocks, and T, a llama2.c-style Transformer with 2 layers. One Transformer layer counts as two blocks, and
@@ -19,6 +23,7 @@ import argparse
 import json
 import math
 import os
+import random
 import statistics
 import sys
 import time
@@ -128,7 +133,47 @@ def m1_batch(B, N, T, V, g, device):
     x[:, 2 * N:4 * N:2] = qk  # the slot after each query stays 0: answers are never shown in the input
     y = torch.full((B, T), -1, dtype=torch.long, device=device)
     y[:, 2 * N:4 * N:2] = qv
-    return x, y
+    return x, y, torch.arange(2 * N, 4 * N, 2, device=device), {}
+
+
+def m2_batch(B, N, G, T, V, g, device):
+    """N pairs, G filler tokens, then the N queries. Keys, values and filler use disjoint thirds of the vocabulary."""
+    third = V // 3
+    keys = torch.rand(B, third - 1, generator=g, device=device).argsort(1)[:, :N] + 1
+    vals = torch.randint(third, 2 * third, (B, N), generator=g, device=device)
+    perm = torch.rand(B, N, generator=g, device=device).argsort(1)
+    x = torch.zeros(B, T, dtype=torch.long, device=device)
+    x[:, 0:2 * N:2], x[:, 1:2 * N:2] = keys, vals
+    x[:, 2 * N:2 * N + G] = torch.randint(2 * third, V, (B, G), generator=g, device=device)
+    q0 = 2 * N + G
+    x[:, q0:q0 + 2 * N:2] = keys.gather(1, perm)
+    y = torch.full((B, T), -1, dtype=torch.long, device=device)
+    y[:, q0:q0 + 2 * N:2] = vals.gather(1, perm)
+    return x, y, torch.arange(q0, q0 + 2 * N, 2, device=device), {}
+
+
+def m3_batch(B, N, T, V, g, device):
+    """N pairs, then N/2 of the keys again with new values, then all N keys as queries; the answer is the newest value."""
+    half, U = V // 2, N // 2
+    keys = torch.rand(B, half - 1, generator=g, device=device).argsort(1)[:, :N] + 1
+    old = torch.randint(half, V, (B, N), generator=g, device=device)
+    order = torch.rand(B, N, generator=g, device=device).argsort(1)
+    upd = torch.zeros(B, N, dtype=torch.bool, device=device).scatter_(1, order[:, :U], True)
+    new = (old - half + torch.randint(1, half, (B, N), generator=g, device=device)) % half + half  # never the old value
+    latest = torch.where(upd, new, old)
+    perm = torch.rand(B, N, generator=g, device=device).argsort(1)
+    x = torch.zeros(B, T, dtype=torch.long, device=device)
+    x[:, 0:2 * N:2], x[:, 1:2 * N:2] = keys, old
+    x[:, 2 * N:2 * N + 2 * U:2], x[:, 2 * N + 1:2 * N + 2 * U:2] = keys.gather(1, order[:, :U]), new.gather(1, order[:, :U])
+    q0 = 2 * N + 2 * U
+    x[:, q0:q0 + 2 * N:2] = keys.gather(1, perm)
+    y = torch.full((B, T), -1, dtype=torch.long, device=device)
+    y[:, q0:q0 + 2 * N:2] = latest.gather(1, perm)
+    return x, y, torch.arange(q0, q0 + 2 * N, 2, device=device), {"upd": upd.gather(1, perm), "old": old.gather(1, perm)}
+
+
+def round_up(n, k=64):  # the fast-memory kernel works in chunks of 64 tokens
+    return -(-n // k) * k
 
 
 def main():
@@ -137,7 +182,7 @@ def main():
     ap.add_argument("--dim", type=int, required=True)
     ap.add_argument("--lr", type=float, required=True)
     ap.add_argument("--out_dir", required=True)
-    ap.add_argument("--task", choices=["m1"], default="m1")
+    ap.add_argument("--task", choices=["m1", "m2", "m3"], default="m1")
     ap.add_argument("--counts", default="8,16,32,64,128,256")
     ap.add_argument("--seq", type=int, default=1024)
     ap.add_argument("--vocab", type=int, default=8192)
@@ -149,9 +194,15 @@ def main():
     ap.add_argument("--eval_every", type=int, default=2000)
     ap.add_argument("--eval_size", type=int, default=1024)
     ap.add_argument("--compile", type=int, default=1)
+    ap.add_argument("--gmax", type=int, default=256, help="m2: training gaps are drawn from 0..gmax")
+    ap.add_argument("--gaps", default="0,64,256,1024,4096", help="m2: gaps evaluated")
     a = ap.parse_args()
     counts = [int(c) for c in a.counts.split(",")]
-    assert 4 * max(counts) <= a.seq, "4N tokens must fit in the sequence"
+    gaps = [int(c) for c in a.gaps.split(",")]
+    if a.task == "m2":
+        a.seq = round_up(4 * counts[0] + a.gmax)  # training length; each evaluated gap gets its own length
+    need = {"m1": 4, "m2": 4, "m3": 5}[a.task] * max(counts) + (a.gmax if a.task == "m2" else 0)
+    assert need <= a.seq, f"{need} tokens must fit in the sequence"
     os.makedirs(a.out_dir, exist_ok=True)
 
     cuda = torch.cuda.is_available()
@@ -169,25 +220,53 @@ def main():
     amp = torch.autocast("cuda", dtype=torch.bfloat16) if cuda else torch.autocast("cpu", enabled=False)
     print(f"model {a.model} d={a.dim} m={m} params {params:,} device {dev}", flush=True)
 
-    def loss_acc(x, y, N):
-        pos = torch.arange(2 * N, 4 * N, 2, device=dev)  # the query positions, known in advance: no host sync
+    def loss_acc(x, y, pos, info):
+        # pos: the query positions, known in advance, so selecting them needs no host sync
         with amp:
             h = fwd(x)
-            logits = net.output(h[:, pos]).float().flatten(0, 1)
-        t = y[:, pos].flatten()
-        return F.cross_entropy(logits, t), (logits.argmax(-1) == t).float().mean()
+            logits = net.output(h[:, pos]).float()
+        t = y[:, pos]
+        pred = logits.argmax(-1)
+        return F.cross_entropy(logits.flatten(0, 1), t.flatten()), (pred == t).float().mean(), pred, t
+
+    def batch(case, B, g):
+        if a.task == "m1":
+            return m1_batch(B, case, a.seq, a.vocab, g, dev)
+        if a.task == "m2":
+            return m2_batch(B, counts[0], case, round_up(4 * counts[0] + case), a.vocab, g, dev)
+        return m3_batch(B, case, a.seq, a.vocab, g, dev)
+
+    cases = gaps if a.task == "m2" else counts
+    label = (lambda c: f"G{c}") if a.task == "m2" else (lambda c: c)
 
     @torch.no_grad()
     def evaluate(split):  # fixed sets: the same sequences for every model and run
         net.eval()
         out = {}
-        for N in counts:
-            g = torch.Generator(device=dev).manual_seed({"val": 1, "test": 2}[split] * 100003 + N)
-            accs = [loss_acc(*m1_batch(a.batch, N, a.seq, a.vocab, g, dev), N)[1].item()
-                    for _ in range(max(1, a.eval_size // a.batch))]
-            out[N] = sum(accs) / len(accs)
+        eb = min(a.batch, 32) if a.task == "m2" else a.batch  # m2 evaluates sequences up to 4N + 4096 long
+        for c in cases:
+            g = torch.Generator(device=dev).manual_seed({"val": 1, "test": 2}[split] * 100003 + c)
+            hit = upd_hit = upd_n = old_hit = keep_hit = keep_n = 0.0
+            nb = max(1, a.eval_size // eb)
+            for _ in range(nb):
+                x, y, pos, info = batch(c, eb, g)
+                _, acc, pred, t = loss_acc(x, y, pos, info)
+                hit += acc.item()
+                if a.task == "m3":
+                    u = info["upd"]
+                    upd_hit += ((pred == t) & u).sum().item(); upd_n += u.sum().item()
+                    old_hit += ((pred == info["old"]) & u).sum().item()
+                    keep_hit += ((pred == t) & ~u).sum().item(); keep_n += (~u).sum().item()
+            out[label(c)] = ({"all": hit / nb, "updated": upd_hit / upd_n, "kept": keep_hit / keep_n, "old": old_hit / upd_n}
+                             if a.task == "m3" else hit / nb)
         net.train()
         return out
+
+    def show(v):
+        return " ".join(f"{k} " + (" ".join(f"{n} {x:.4f}" for n, x in acc.items()) if isinstance(acc, dict) else f"{acc:.4f}")
+                        for k, acc in v.items())
+
+    pick = random.Random(a.seed)  # m2 gaps, drawn on the host so no step waits on the GPU
 
     g = torch.Generator(device=dev).manual_seed(a.seed)
     curve, times, diverged = [], [], False
@@ -197,7 +276,7 @@ def main():
         if step % a.eval_every == 0 or step == a.steps:
             v = evaluate("val")
             curve.append((step, v))
-            print(f"step {step}: val acc " + " ".join(f"N{N} {acc:.4f}" for N, acc in v.items()), flush=True)
+            print(f"step {step}: val acc " + (show(v) if a.task != "m1" else " ".join(f"N{N} {acc:.4f}" for N, acc in v.items())), flush=True)
             tl = time.time()  # evaluation time is not training time
         if step == a.steps:
             break
@@ -205,8 +284,12 @@ def main():
             a.lr * 0.5 * (1 + math.cos(math.pi * (step - a.warmup) / (a.steps - a.warmup)))
         for group in opt.param_groups:
             group["lr"] = lr
-        N = counts[step % len(counts)]
-        loss, acc = loss_acc(*m1_batch(a.batch, N, a.seq, a.vocab, g, dev), N)
+        case = pick.randint(0, a.gmax) if a.task == "m2" else counts[step % len(counts)]
+        if a.task == "m2":  # pad to the fixed training length so the compiled graph keeps one shape
+            x, y, pos, info = m2_batch(a.batch, counts[0], case, a.seq, a.vocab, g, dev)
+        else:
+            x, y, pos, info = batch(case, a.batch, g)
+        loss, acc, _, _ = loss_acc(x, y, pos, info)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
         opt.step()
@@ -223,12 +306,13 @@ def main():
                 break
     result = {"task": a.task, "model": a.model, "dim": a.dim, "slots": m, "params": params, "lr": a.lr, "seed": a.seed,
               "steps": a.steps, "batch": a.batch, "seq": a.seq, "vocab": a.vocab, "counts": counts, "diverged": diverged,
+              **({"gmax": a.gmax, "gaps": gaps} if a.task == "m2" else {}),
               "val": evaluate("val") if diverged else curve[-1][1], "test": evaluate("test"), "val_curve": curve,
               "ms_per_iter": statistics.median(times[1:]) if len(times) > 1 else None,
               "train_seconds": round(time.time() - t0)}
     with open(os.path.join(a.out_dir, "eval.json"), "w") as f:
         json.dump(result, f, indent=2)
-    print("test acc " + " ".join(f"N{N} {acc:.4f}" for N, acc in result["test"].items()), flush=True)
+    print("test acc " + (show(result["test"]) if a.task != "m1" else " ".join(f"N{N} {acc:.4f}" for N, acc in result["test"].items())), flush=True)
 
 
 if __name__ == "__main__":
