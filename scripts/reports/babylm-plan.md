@@ -255,3 +255,32 @@ normal 的分段 loss 要跟第 8 節 GPU 評測的數字相差 0.005 以內，�
 - clamp 之後剩下的 0.09 是什麼，還不知道。
 - 只有 1 個 seed。合成任務裡 S 在長距離輸給 P-free（`memory-plan.md` 第 15 節），這裡反過來，兩個發現的條件不同：
   那裡是會干擾的雜訊寫入，這裡是真實文字超過訓練長度。
+
+## 11. 多跑兩個 seed（2026-11-08，Gary 睡前說「explore and run seed」，在任何新結果之前寫下）
+
+第 8、10 節都只有 1 個 seed。這一節把三個模型各多跑 2 個 seed，看哪些結論站得住。
+
+**怎麼跑：**
+- seed 1338、1339（原本是 1337）。seed 同時改初始權重和資料順序：資料順序的亂數是 42＋(seed−1337)，原本的 1337 照舊是 42，
+  所以 seed 0 的結果不受影響（`train_variant.py` 和 `babylm.py` 的改動只有這個）。
+- 其他設定跟第 3 節完全一樣。計畫 `scripts/nrp/babylm_seeds.txt`，6 行，跑在單卡 A6000 bare pod 上，跑完就刪。
+- 評測跟第 4 節一樣（`eval_babylm.py`），檢查也一樣（@512 跟 `train.py` 最後一次驗證 loss 相差 0.01 以內）。
+- 第 9 節的診斷（`diag_length.py`，normal、window、clamp，加上逐層 window）在 Mac 的 CPU 上對兩個新 seed 的 S 和 P-free 各跑一次，程式不改。
+
+**判讀規則：**
+- 第 5 節的每一條（S 對 T、S 對 P-free 的 loss 和 BLiMP、長距離）照原本的門檻，每個 seed 各判一次。
+  3 個 seed 判得一樣才說「站得住」，否則說「不穩」，並列出 3 個 seed 各自的差距和平均。
+- 第 8 節裡探索性的「最好那一步」：每個 seed 也算 S 和 P-free 在 `train.py` 驗證 loss 最低那一步的差距。3 個都是 P-free 低超過 0.02，才說「在最好的那一步 P-free 較好」。
+- 長距離，每個模型自己的退步 loss(1024–2048) − loss(256–512)：0.05 以內算「不崩」。
+- 診斷：救回比例＝(normal − 介入後) / (normal − base)，base 是該 seed 的 P-free 在 256–512 的 loss。
+  兩個新 seed 的 clamp 都救回至少 80%，才說「份量是主因」站得住。如果某個 seed 的 P-free 根本沒崩（差距小於 0.10），救回比例沒有意義，照實寫。
+- 份量增長：每個 block 的上下文份量 1024–2048 除以 256–512，取 12 個 block 的中位數。每個 seed 都是 S 小於 P-free，才說「S 的份量長得比較少」站得住。
+
+**事前預測：**
+- S 對 T 的 loss：3 個 seed 都是 S 較差，差 0.07–0.12。
+- S 對 T 的 BLiMP：不穩。seed 0 的 +2.3 只比門檻多一點，至少一個新 seed 會打平。
+- S 對 P-free 的 loss：最後一步至少 2 個 seed 打平；最好的那一步 3 個 seed 都是 P-free 低超過 0.02。
+- S 對 P-free 的 BLiMP：至少 2 個 seed 打平。
+- 長距離：3 個 seed 都是「統一版退得比較少」；P-free 每個 seed 都退步超過 0.5，S 都在 0.05 以內。
+- 診斷：兩個新 seed 的 clamp 都救回至少 80%，window 救回的比 clamp 少；單獨修一層救最多的都是 block 0。
+- 份量增長的中位數：每個 seed 都是 S 小於 P-free。

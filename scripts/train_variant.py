@@ -37,6 +37,8 @@ if own["dataset"] == "babylm":  # train.py imports its Task from tinystories
     sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "babylm"))
     import babylm  # noqa: E402
     sys.modules["tinystories"] = babylm
+    seed = next((int(a.split("=", 1)[1]) for a in argv if a.startswith("--seed=")), 1337)
+    babylm.DATA_SEED += seed - 1337  # a new seed changes the data order as well as the initialization
 elif own["dataset"] != "tinystories":
     raise SystemExit(f"unknown dataset {own['dataset']}")
 export.model_export = lambda *a, **k: None       # the run.c format belongs to the standard model

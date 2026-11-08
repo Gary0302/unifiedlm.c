@@ -25,6 +25,7 @@ DATA_DIR = "data/babylm10m"
 SOURCES = ["bnc_spoken", "childes", "gutenberg", "open_subtitles", "simple_wiki", "switchboard"]
 VAL_FRACTION = 0.02
 BOS, EOS = 1, 2
+DATA_SEED = 42  # train order; scripts/train_variant.py shifts it with --seed, so the default seed keeps this order
 
 
 def load_tokenizer(tok_dir):
@@ -88,7 +89,7 @@ class PretokDataset(torch.utils.data.IterableDataset):
         worker_info = torch.utils.data.get_worker_info()
         worker_id = worker_info.id if worker_info else 0
         rank = dist.get_rank() if dist.is_initialized() else 0
-        rng = random.Random(42 + worker_id + 1337 * rank)
+        rng = random.Random(DATA_SEED + worker_id + 1337 * rank)
         m = np.memmap(os.path.join(DATA_DIR, f"{self.split}.bin"), dtype=np.uint16, mode="r")
         n = (len(m) - 1) // self.max_seq_len
         while True:
