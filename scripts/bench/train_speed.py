@@ -1,4 +1,4 @@
-"""Training throughput and peak memory of S and T at the 15M / 42M / 110M widths, on random tokens.
+"""Training throughput and peak memory of S and T (BENCH_VARIANTS="S T SG P" adds the gated S and P-free) at the 15M / 42M / 110M widths, on random tokens.
 One full step = forward, backward, grad clip, fused AdamW, bf16 autocast (BENCH_DTYPE=float16 for fp16), torch.compile, as in train.py.
 Each (variant, size, micro-batch) runs in its own process so an OOM cannot affect the next one; the
 micro-batch doubles until it no longer fits. Run from the repository root:
@@ -18,6 +18,7 @@ DTYPE = os.environ.get("BENCH_DTYPE", "bfloat16")  # float16 on cards without bf
 
 
 def one(variant, size, bs):
+    """BENCH_BS="15M:16,42M:8" runs only that micro-batch per size instead of doubling until OOM."""
     import torch
     sys.path.insert(0, os.getcwd())
     sys.path.insert(0, os.path.join(os.getcwd(), "scripts"))
@@ -25,10 +26,10 @@ def one(variant, size, bs):
     import variants
     dim, n_layers, slots, ffn, head_dim = SIZES[size]
     variants.HEAD_DIM = head_dim
-    variants.install(variant)
+    variants.install(variant, slots, slots)  # m_s, m_f: P-free gives each path all the slots
     torch.manual_seed(0)
     torch.backends.cuda.matmul.allow_tf32 = True
-    net = model.UnifiedLM(model.ModelArgs(dim=dim, n_layers=n_layers, hidden_dim=slots if variant == "S" else ffn,
+    net = model.UnifiedLM(model.ModelArgs(dim=dim, n_layers=n_layers, hidden_dim=ffn if variant == "T" else slots,
                                           vocab_size=VOCAB, max_seq_len=SEQ)).cuda()
     params = sum(p.numel() for p in net.parameters())
     opt = net.configure_optimizers(0.1, 5e-4, (0.9, 0.95), "cuda")
@@ -58,10 +59,12 @@ def main(sizes):
     import torch
     print(json.dumps({"gpu": torch.cuda.get_device_name(), "torch": torch.__version__, "cpus": len(os.sched_getaffinity(0))}),
           flush=True)
-    plan = [(v, s) for s in sizes for v in ("S", "T")]
+    plan = [(v, s) for s in sizes for v in os.environ.get("BENCH_VARIANTS", "S T").split()]
+    fixed = dict(kv.split(":") for kv in os.environ.get("BENCH_BS", "").split(",") if kv)  # e.g. 15M:16,42M:8
     for variant, size in plan:
-        bs = 8
-        while bs <= 256:
+        bs = int(fixed.get(size, 8))
+        top = bs if size in fixed else 256
+        while bs <= top:
             r = subprocess.run([sys.executable, "-u", __file__, variant, size, str(bs)], capture_output=True, text=True)
             line = r.stdout.strip().splitlines()[-1] if r.returncode == 0 and r.stdout.strip() else None
             if line is None:

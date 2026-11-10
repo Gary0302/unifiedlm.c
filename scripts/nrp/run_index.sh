@@ -32,6 +32,10 @@ else
     [[ $PLAN == babylm* ]] && EVAL=scripts/babylm/eval_babylm.py
     [[ $PLAN == fw* ]] && EVAL=scripts/fineweb/eval_fineweb.py
     python $EVAL --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"
+    if [[ $PLAN == fwsg* || $PLAN == fwsr* ]]; then  # past-L diagnostics and the learned gates; not fatal
+        python scripts/fineweb/diag_long.py --out_dir="$LOCAL" > "$LOCAL/diag_long.log" 2>&1 || true
+        python scripts/fineweb/gates.py --out_dir="$LOCAL" > "$LOCAL/gates.log" 2>&1 || true
+    fi
 fi
 echo "{\"name\": \"$NAME\", \"node\": \"${NODE_NAME:-unknown}\", \"train_seconds\": $TRAIN_SECONDS}" > "$LOCAL/timing.json"
 
