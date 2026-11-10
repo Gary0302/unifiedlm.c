@@ -5,7 +5,7 @@ Gary 決定先做 42M，資料用 FineWeb-Edu，跑在 A6000 上。這是 PoC：
 ## 要回答的問題
 
 - 42M 的 S 能不能在大一點的真實語料上正常學（loss 一路下降、沒有發散）。
-- S 和 T 的 val loss 差多少。BabyLM 15M 時 S 比 T 高 0.10，但那是不同的資料和詞表，不能直接當成放大的趨勢。要看趨勢，得在同一份資料上補 15M 的 S 和 T（還沒排，要 Gary 同意）。
+- S 和 T 的 val loss 差多少。BabyLM 15M 時 S 比 T 高 0.10，但那是不同的資料和詞表，不能直接當成放大的趨勢。要看趨勢，同一份資料上也補 15M 的 S 和 T（Gary 2026-11-10 同意，`scripts/nrp/fw15m.txt`：dim 288、12 個 block，S 712 格，T SwiGLU 768、head dim 48；2300 步 = 3.01 億 token，約參數量 20 倍；warmup 360 步，和 42M 一樣佔總步數約 16%；其他同 42M）。
 - 超過訓練長度（1024 → 4096）時 S 還撐不撐得住，T 是否照樣崩。
 
 ## 資料
@@ -42,3 +42,9 @@ Gary 決定先做 42M，資料用 FineWeb-Edu，跑在 A6000 上。這是 PoC：
   - 42M 的 T 在 batch 32 時每秒 21.4 萬 token，約 1.1 小時。
 - 兩個 pod 各一張 A6000，每個 pod 都在 6 小時上限內。
 - A6000 節點的空閒 CPU 只有 0.1–0.3 顆，所以 pod 只要 150m CPU，裝環境和編譯會比較慢。
+
+## 排程（2026-11-10）
+
+- 每種允許的卡各送一個 Job 排隊（`scripts/nrp/fw-run.sh`），依序做 `fw42m.txt`、`fw15m.txt`，靠 `run_queue.sh` 的 claim 分工：只有一張卡時它一路做下去，有第二張就自動分攤。
+- 24GB / 32GB 的卡把 42M 改成 micro-batch 16 × 梯度累積 8，每步 token 數不變。
+- 第一張排上的是 RTX 5000 Ada（32GB，k8s-gpu-6.ucsc.edu），領走 42M S。它在開跑後才加 15M，所以是在 pod 裡的 `run_index.sh` 結尾補上一段：發布完就接著跑兩份計畫裡還沒人領的項目。
