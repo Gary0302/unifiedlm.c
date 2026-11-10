@@ -16,7 +16,6 @@ import torch
 sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "babylm"))
 sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "fineweb"))
 import eval_babylm as ev   # noqa: E402
-import fineweb_subset      # noqa: E402
 import variants            # noqa: E402
 
 
@@ -31,6 +30,8 @@ def main():
     torch.backends.cudnn.allow_tf32 = False
     meta = json.load(open(os.path.join(a.out_dir, "variant.json")))
     variants.HEAD_DIM = meta.get("head_dim", 48)
+    os.environ["FW_SUBSET"] = "4of14" if meta["dataset"] == "fineweb4" else "2of14"
+    import fineweb_subset  # both subsets share the validation shard
     net, meta, ckpt = ev.load(a.out_dir, device)
     val = sorted(glob.glob(os.path.join(fineweb_subset.fineweb.DATA_DIR, "*.bin")))[-1]
     ev.DATA_DIR = tempfile.mkdtemp()

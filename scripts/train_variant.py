@@ -34,10 +34,13 @@ import variants  # noqa: E402
 
 variants.HEAD_DIM = own["head_dim"]  # T only; llama2.c uses 64 at dim 512 and 768
 variants.install(own["variant"], own["m_s"], own["m_f"])
-if own["dataset"] == "fineweb":  # the 2-of-14 subset; train.py imports its Task from tinystories
+if own["dataset"] in ("fineweb", "fineweb4"):  # 2-of-14 or 4-of-14 subset; train.py imports Task from tinystories
+    os.environ["FW_SUBSET"] = "4of14" if own["dataset"] == "fineweb4" else "2of14"
     sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "fineweb"))
     import fineweb_subset  # noqa: E402
     sys.modules["tinystories"] = fineweb_subset
+    seed = next((int(a.split("=", 1)[1]) for a in argv if a.startswith("--seed=")), 1337)
+    fineweb_subset.DATA_SEED = seed - 1337  # as for BabyLM, a new seed changes the data order too
 elif own["dataset"] == "babylm":  # train.py imports its Task from tinystories
     sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "babylm"))
     import babylm  # noqa: E402

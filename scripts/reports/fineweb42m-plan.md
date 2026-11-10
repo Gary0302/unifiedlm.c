@@ -56,3 +56,16 @@ Gary 決定先做 42M，資料用 FineWeb-Edu，跑在 A6000 上。這是 PoC：
 - `scripts/nrp/fwp.txt`，其他設定同 S。三個在跑的 pod 都在 `run_index.sh` 結尾接上這份計畫；15M 排前面，讓最早空出來的 A10 做短的，3090 接長的 42M。
 - 三張卡都小於 40GB，pod 裡的 `fwp.txt` 把 42M 改成 micro-batch 16 × 梯度累積 8（P-free 比 S 多吃顯存，S 在 batch 32 已經用到 22GB）。repo 裡的 `fwp.txt` 就是 pod 裡那份。
 - P-free 在 d=512 沒有跑過 kernel 檢查（`check_kernel.py` 只測到 d=288），也沒有 preflight。
+
+## 再疊上去：110M 的 S 和 T、15M 三個 seed（2026-11-10）
+
+- **110M**（`scripts/nrp/fw110m.txt`）：dim 768、24 個 block，S 1912 格，T SwiGLU 2048、head dim 64。16,700 步 × 131,072 = 21.9 億 token，約參數量 20 倍。warmup 2600 步，約 16%，LR 5e-4，每 1000 步評估一次。micro-batch 16 × 梯度累積 8，小於 40GB 的卡改成 8 × 16。
+- **110M 的資料要多一倍**：2of14 只有 16.7 億訓練 token，不夠。`scripts/fineweb/prep_4of14.sh` 再切 parquet 002、003，和 2of14 的訓練 shard 合成 `FineWebEdu_4of14`，約 34 億訓練 token。驗證 shard 沿用 2of14 的 `001_00000_008.bin`，改名為 `val_001_00000_008.bin`，讓它排序在最後，所以 15M、42M、110M 用的是同一個驗證集，110M 也不會練到它。
+- **15M 三個 seed**（`scripts/nrp/fw15m_seeds.txt`）：Gary 允許的。S、T、P-free 各加 seed 1338、1339，跟 1337 合起來共三個。跟 BabyLM 一樣，seed 同時改變初始化和資料順序：`fineweb_subset.DATA_SEED = seed − 1337` 會平移 `fineweb.py` 原本固定的亂數 42，所以 1337 的順序不變。
+- **排程**：
+  - 在跑的三個 pod 用 `run_index.sh` 結尾的第三段接 `scripts/nrp/fw-next.sh`。
+  - A10 比較慢，先做 seed，110M 只做 T（它那份 `fw110m.txt` 只有 T 那一行）。
+  - 5000 Ada 和 3090 先做 110M 再做 seed；4of14 還沒好的話，先跳過 110M。
+  - 新的 Job（`scripts/nrp/fw-run2.sh`）等資料好了，再送到較快的卡上排隊。
+- **110M 的 S 在 A6000 上估計要約 22 小時**（3090 Ti 實測 30K tok/s），T 約 9 小時。
+- **還沒驗證的風險**：在 Mac 上 forward 一次，110M 的 S 剛初始化時 loss 是 15.3。
