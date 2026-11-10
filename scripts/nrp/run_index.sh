@@ -30,6 +30,7 @@ else
     TRAIN_SECONDS=$((SECONDS - START))
     EVAL=scripts/eval_nll.py
     [[ $PLAN == babylm* ]] && EVAL=scripts/babylm/eval_babylm.py
+    [[ $PLAN == fw* ]] && EVAL=scripts/fineweb/eval_fineweb.py
     python $EVAL --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"
 fi
 echo "{\"name\": \"$NAME\", \"node\": \"${NODE_NAME:-unknown}\", \"train_seconds\": $TRAIN_SECONDS}" > "$LOCAL/timing.json"

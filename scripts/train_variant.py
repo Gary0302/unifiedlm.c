@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-own = {"variant": "S", "m_s": 0, "m_f": 0, "dataset": "tinystories"}
+own = {"variant": "S", "m_s": 0, "m_f": 0, "dataset": "tinystories", "head_dim": 48}
 argv = []
 for arg in sys.argv[1:]:
     key, _, val = arg[2:].partition("=")
@@ -32,8 +32,13 @@ sys.argv = [sys.argv[0]] + argv
 import export    # noqa: E402
 import variants  # noqa: E402
 
+variants.HEAD_DIM = own["head_dim"]  # T only; llama2.c uses 64 at dim 512 and 768
 variants.install(own["variant"], own["m_s"], own["m_f"])
-if own["dataset"] == "babylm":  # train.py imports its Task from tinystories
+if own["dataset"] == "fineweb":  # the 2-of-14 subset; train.py imports its Task from tinystories
+    sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "fineweb"))
+    import fineweb_subset  # noqa: E402
+    sys.modules["tinystories"] = fineweb_subset
+elif own["dataset"] == "babylm":  # train.py imports its Task from tinystories
     sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "babylm"))
     import babylm  # noqa: E402
     sys.modules["tinystories"] = babylm
