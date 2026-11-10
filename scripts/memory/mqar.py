@@ -187,7 +187,7 @@ def round_up(n, k=64):  # the fast-memory kernel works in chunks of 64 tokens
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", choices=["S", "P", "T", "SG"], required=True)
+    ap.add_argument("--model", choices=["S", "P", "T", "SG", "SH"], required=True)
     ap.add_argument("--dim", type=int, required=True)
     ap.add_argument("--lr", type=float, required=True)
     ap.add_argument("--out_dir", required=True)
