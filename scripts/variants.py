@@ -144,6 +144,12 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SH":  # control: S with its forgetting rate started at 1/64
         import gated
         model.UnifiedBlock = gated.ShortBlock
+    elif variant == "SD":  # S with a delta-rule memory anchored at the FFN, scripts/delta.py
+        import delta
+        model.UnifiedBlock = delta.DeltaBlock
+    elif variant == "SD2":  # SD plus a slow memory and a read mix
+        import delta
+        model.UnifiedBlock = delta.TwoDeltaBlock
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)

@@ -45,7 +45,7 @@ def main():
         rate = layer.log_rate.detach().exp().flatten()
         hz = 1 / rate
         out["layers"].append({"base_horizon_median": q(hz, .5), "base_horizon_p10": q(hz, .1), "base_horizon_p90": q(hz, .9)})
-    if meta["variant"] in ("SG", "SR"):
+    if meta["variant"] in ("SG", "SR", "SD", "SD2"):
         val = np.memmap(sorted(glob.glob(os.path.join(fineweb_subset.fineweb.DATA_DIR, "*.bin")))[-1], dtype=np.uint16, mode="r")
         x = torch.from_numpy(np.stack([val[j * L:(j + 1) * L].astype(np.int64) for j in range(a.windows)])).cuda()
         start = torch.zeros_like(x, dtype=torch.bool)
