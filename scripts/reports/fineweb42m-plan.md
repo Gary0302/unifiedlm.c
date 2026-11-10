@@ -48,3 +48,11 @@ Gary 決定先做 42M，資料用 FineWeb-Edu，跑在 A6000 上。這是 PoC：
 - 每種允許的卡各送一個 Job 排隊（`scripts/nrp/fw-run.sh`），依序做 `fw42m.txt`、`fw15m.txt`，靠 `run_queue.sh` 的 claim 分工：只有一張卡時它一路做下去，有第二張就自動分攤。
 - 24GB / 32GB 的卡把 42M 改成 micro-batch 16 × 梯度累積 8，每步 token 數不變。
 - 第一張排上的是 RTX 5000 Ada（32GB，k8s-gpu-6.ucsc.edu），領走 42M S。它在開跑後才加 15M，所以是在 pod 裡的 `run_index.sh` 結尾補上一段：發布完就接著跑兩份計畫裡還沒人領的項目。
+
+## 疊上去的下一步：P-free 15M 和 42M（2026-11-10）
+
+- Gary 要卡不閒著，先把下一步排上去再一起分析。下一步是統一版真正的對照組 P-free：分開兩組位址，格子數和 S 一樣（42M：m_s = m_f = 1280；15M：712），參數多出 K_f、b_f、ε_f。
+- 問題：BabyLM 上 S 和 P-free 打平、P-free 超過訓練長度會崩；在 FineWeb 上、到 42M 是否還是這樣。
+- `scripts/nrp/fwp.txt`，其他設定同 S。三個在跑的 pod 都在 `run_index.sh` 結尾接上這份計畫；15M 排前面，讓最早空出來的 A10 做短的，3090 接長的 42M。
+- 三張卡都小於 40GB，pod 裡的 `fwp.txt` 把 42M 改成 micro-batch 16 × 梯度累積 8（P-free 比 S 多吃顯存，S 在 batch 32 已經用到 22GB）。repo 裡的 `fwp.txt` 就是 pod 裡那份。
+- P-free 在 d=512 沒有跑過 kernel 檢查（`check_kernel.py` 只測到 d=288），也沒有 preflight。
