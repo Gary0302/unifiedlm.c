@@ -113,3 +113,13 @@ class RateBlock(GatedBlock):
 
     def log_decay(self, r):
         return torch.expm1(-self.log_rate.exp()).expand_as(r)
+
+
+class ShortBlock(UnifiedBlock):
+    """SH, a control for SG: S unchanged except that its one forgetting rate starts at 1/64 instead of
+    1/(4 L), the memory length SG's gate settles near; still learned, still one scalar per layer."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        with torch.no_grad():
+            self.log_rate.fill_(math.log(1.0 / 64))

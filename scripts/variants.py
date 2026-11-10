@@ -141,6 +141,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SR":  # SG's ablation: per-slot rates, no gate
         import gated
         model.UnifiedBlock = gated.RateBlock
+    elif variant == "SH":  # control: S with its forgetting rate started at 1/64
+        import gated
+        model.UnifiedBlock = gated.ShortBlock
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
