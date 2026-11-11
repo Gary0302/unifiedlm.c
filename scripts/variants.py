@@ -225,6 +225,7 @@ def install(variant, m_s=0, m_f=0):
         i = itertools.count()
         model.UnifiedBlock = lambda args: WindowAttentionHalf(args) if next(i) % 5 == 4 else delta.DeltaBlock(args)
     elif variant == "GDN":  # baseline: T with Gated DeltaNet in place of attention
+        import delta  # before UnifiedBlock is replaced: delta imports gated, which subclasses it
         i = itertools.count()
         model.UnifiedBlock = lambda args: GatedDeltaHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
     elif variant == "T":
