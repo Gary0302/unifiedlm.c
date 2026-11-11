@@ -4,7 +4,9 @@
 set -euo pipefail
 R=/workspace/runs
 RUNS="fw15m/fw15m_t fw15m_seeds/fw15m_t_seed1338 fw15m_seeds/fw15m_t_seed1339 fw42m/fw42m_t
-      fwsg/fwsg15m fwsg/fwsg15m_seed1338 fwsg/fwsg15m_seed1339 fwsg/fwsg42m fwsg/fwsg42m_seed1338 fwsgx/fwsg42m_seed1339"
+      fwsg/fwsg15m fwsg/fwsg15m_seed1338 fwsg/fwsg15m_seed1339 fwsg/fwsg42m fwsg/fwsg42m_seed1338 fwsgx/fwsg42m_seed1339
+      fwsh/fwsh15m fwsh2/fwsh15m_seed1338 fwsh2/fwsh15m_seed1339 fwsh2/fwsh42m
+      fwsd/fwsd15m fwsd/fwsd15m_seed1338 fwsd/fwsd15m_seed1339 fwsd/fwsd2_15m"
 for p in $RUNS; do
     name=${p#*/}
     dest=$R/sgvt/$name
