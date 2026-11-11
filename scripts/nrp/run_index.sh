@@ -33,7 +33,11 @@ else
     EVAL=scripts/eval_nll.py
     [[ $PLAN == babylm* ]] && EVAL=scripts/babylm/eval_babylm.py
     [[ $PLAN == fw* ]] && EVAL=scripts/fineweb/eval_fineweb.py
-    python $EVAL --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"
+    if ! python $EVAL --out_dir="$LOCAL" 2>&1 | tee "$LOCAL/eval.log"; then  # keep the trained weights for a re-eval
+        rm -rf "$OUT.noeval.tmp" && cp -r "$LOCAL" "$OUT.noeval.tmp" && mv "$OUT.noeval.tmp" "$OUT.noeval"
+        echo "eval failed; trained run kept at $OUT.noeval"
+        exit 1
+    fi
     if [[ $PLAN == fwsg* || $PLAN == fwsr* || $PLAN == fwsh* || $PLAN == fwsd* || $PLAN == fwlam* ]]; then  # past-L diagnostics and the learned gates; not fatal
         python scripts/fineweb/diag_long.py --out_dir="$LOCAL" > "$LOCAL/diag_long.log" 2>&1 || true
         python scripts/fineweb/gates.py --out_dir="$LOCAL" > "$LOCAL/gates.log" 2>&1 || true
