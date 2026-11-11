@@ -88,21 +88,34 @@ def _rope(x):
     return torch.stack((x1 * c - x2 * s, x1 * s + x2 * c), -1).flatten(-2).type_as(x)
 
 
+class CausalConv(nn.Module):
+    """SD's causal depthwise conv over time (size 4, no activation). UnifiedLM's init starts it as the identity."""
+
+    def __init__(self, d, size=4):
+        super().__init__()
+        self.conv = nn.Conv1d(d, d, size, groups=d, padding=size - 1, bias=False)
+
+    def forward(self, x):
+        return self.conv(x.transpose(1, 2))[..., : x.size(1)].transpose(1, 2)
+
+
 class AttentionHalf(nn.Module):
     """The attention half of a llama2.c layer. The output projection is named mu so that UnifiedLM's init scales
-    it to 0.02/sqrt(n_layers), which with two blocks per layer is GPT-2's scaling of residual projections."""
+    it to 0.02/sqrt(n_layers), which with two blocks per layer is GPT-2's scaling of residual projections.
+    conv=True (TC) passes the normed input through SD's causal conv before q, k, v."""
 
-    def __init__(self, args):
+    def __init__(self, args, conv=False):
         super().__init__()
         d = args.dim
         self.h = d // HEAD_DIM
         self.norm = RMSNorm(d, eps=args.norm_eps)
+        self.mix = CausalConv(d) if conv else nn.Identity()
         self.wq, self.wk, self.wv, self.mu = (nn.Linear(d, d, bias=False) for _ in range(4))
         self.dropout = nn.Dropout(args.dropout)
 
     def forward(self, x):
         B, T, d = x.shape
-        a = self.norm(x)
+        a = self.mix(self.norm(x))
         q, k, v = (w(a).view(B, T, self.h, HEAD_DIM).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
         y = F.scaled_dot_product_attention(_rope(q), _rope(k), v, is_causal=True)
         return x + self.dropout(self.mu(y.transpose(1, 2).reshape(B, T, d)))
@@ -133,10 +146,12 @@ class GatedDeltaHalf(nn.Module):
         alpha_t = exp(-exp(A) softplus(W_a h + dt)),  beta_t = sigmoid(W_b h)
     then o -> RMSNorm per head -> * SiLU(W_g h) -> output projection, as in the paper and fla's GatedDeltaNet.
     q, k, v pass a causal depthwise conv (size 4) and SiLU. delta.delta_memory computes the recurrence (chunk 32);
-    log alpha is clamped at -2 per step so its within-chunk exp(-cumsum) stays finite in fp32."""
+    log alpha is clamped at -2 per step so its within-chunk exp(-cumsum) stays finite in fp32. soft=True (GDNs)
+    bounds it smoothly instead, 2 expm1(log alpha / 2) in (-2, 0], so a head near the bound still gets a gradient."""
 
-    def __init__(self, args):
+    def __init__(self, args, soft=False):
         super().__init__()
+        self.soft = soft
         d = args.dim
         self.h = d // HEAD_DIM
         self.norm = RMSNorm(d, eps=args.norm_eps)
@@ -163,7 +178,7 @@ class GatedDeltaHalf(nn.Module):
             k = F.normalize(k, dim=-1)
             beta = torch.sigmoid(_hi(self.wb(a))).transpose(1, 2).reshape(B * H, T)
             la = -self.A_log.exp() * F.softplus(_hi(self.wa(a)) + self.dt_shift)
-            la = la.clamp(min=-2.0).transpose(1, 2).reshape(B * H, T, 1).expand(B * H, T, hd)
+            la = (2 * torch.expm1(la / 2) if self.soft else la.clamp(min=-2.0)).transpose(1, 2).reshape(B * H, T, 1).expand(B * H, T, hd)
             o = delta.delta_memory(k, v, beta, la, q, chunk=32)
         o = self.onorm(o.reshape(B, H, T, hd).transpose(1, 2)).reshape(B, T, d).type_as(x)
         return x + self.dropout(self.mu(o * F.silu(self.wg(a))))
@@ -228,8 +243,15 @@ def install(variant, m_s=0, m_f=0):
         import delta  # before UnifiedBlock is replaced: delta imports gated, which subclasses it
         i = itertools.count()
         model.UnifiedBlock = lambda args: GatedDeltaHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
+    elif variant == "GDNs":  # GDN with the soft bound on log alpha; run with large heads (--head_dim=144)
+        import delta
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: GatedDeltaHalf(args, soft=True) if next(i) % 2 == 0 else FeedForwardHalf(args)
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
+    elif variant == "TC":  # control: T with SD's causal conv before attention
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: AttentionHalf(args, conv=True) if next(i) % 2 == 0 else FeedForwardHalf(args)
     else:
         raise ValueError(variant)

@@ -67,7 +67,7 @@ def main():
 
         def attn(self, x):
             B, T_, d = x.shape
-            h = self.norm(x)
+            h = self.mix(self.norm(x))
             qq, k, v = (w(h).view(B, T_, self.h, variants.HEAD_DIM).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
             y = F.scaled_dot_product_attention(variants._rope(qq), variants._rope(k), v, attn_mask=band[:T_, :T_])
             return x + self.mu(y.transpose(1, 2).reshape(B, T_, d))

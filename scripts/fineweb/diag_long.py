@@ -54,13 +54,13 @@ def main():
     out = {"variant": meta["variant"], "L": L, "T": T, "windows": a.windows}
     rec = {}
 
-    if meta["variant"] == "T":
+    if meta["variant"] in ("T", "TC"):
         band = torch.ones(T, T, dtype=torch.bool, device=device).tril()
         band &= ~torch.ones(T, T, dtype=torch.bool, device=device).tril(-L)   # key within the last L positions
 
         def attn(self, x):
             B, T_, d = x.shape
-            h = self.norm(x)
+            h = self.mix(self.norm(x))
             q, k, v = (w(h).view(B, T_, self.h, variants.HEAD_DIM).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
             y = F.scaled_dot_product_attention(variants._rope(q), variants._rope(k), v, attn_mask=band[:T_, :T_])
             return x + self.mu(y.transpose(1, 2).reshape(B, T_, d))
@@ -97,7 +97,7 @@ def main():
             n += len(rows)
     per = total / n
     out["nll_by_position"] = buckets(per)
-    if meta["variant"] != "T":
+    if meta["variant"] not in ("T", "TC"):
         layers = sorted(k for k in rec if k != "_i")
         out["prior_share_by_layer"] = [buckets((rec[k][0] / rec[k][1]).double().cpu()) for k in layers]
     print(json.dumps(out), flush=True)
