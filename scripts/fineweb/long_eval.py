@@ -35,6 +35,7 @@ def run(net, val, T, n, device):
             total += F.cross_entropy(logits.transpose(1, 2), xy[:, 1:], reduction="none")[0].double().cpu()
     per = total / n
     edges = [0, 64, 128, 256, 512] + [512 * 2 ** i for i in range(1, 20) if 512 * 2 ** i <= T]
+    edges += [T] if edges[-1] < T else []   # a last partial bucket when T is not a power of two (e.g. 20 L)
     b = {f"{a}-{c}": per[a:c].mean().item() for a, c in zip(edges, edges[1:])}
     return {"nll_by_position": b, "ppl_by_position": {k: math.exp(v) for k, v in b.items()}}
 
