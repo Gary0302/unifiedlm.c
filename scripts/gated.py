@@ -74,12 +74,12 @@ def gated_memory(r, v, logl, w, chunk=CHUNK):
 
 class GatedBlock(UnifiedBlock):
 
-    def __init__(self, args):
+    def __init__(self, args, rank=RANK):
         super().__init__(args)
         m = args.hidden_dim
         self.log_rate = nn.Parameter(torch.full((m,), math.log(1.0 / (4 * args.max_seq_len))))
-        self.gate_q = nn.Linear(m, RANK, bias=False)
-        self.gate_p = nn.Linear(RANK, m, bias=True)
+        self.gate_q = nn.Linear(m, rank, bias=False)
+        self.gate_p = nn.Linear(rank, m, bias=True)
         self.log_beta = nn.Parameter(torch.tensor(-7.0))
 
     def log_decay(self, r):

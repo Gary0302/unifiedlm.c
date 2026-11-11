@@ -138,6 +138,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SG":  # S with a per-slot, per-token forget gate read off the address, scripts/gated.py
         import gated
         model.UnifiedBlock = gated.GatedBlock
+    elif variant == "SG64":  # SG with a rank-64 gate bottleneck
+        import gated
+        model.UnifiedBlock = lambda args: gated.GatedBlock(args, rank=64)
     elif variant == "SR":  # SG's ablation: per-slot rates, no gate
         import gated
         model.UnifiedBlock = gated.RateBlock
