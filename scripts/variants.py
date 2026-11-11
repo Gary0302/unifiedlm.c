@@ -108,6 +108,67 @@ class AttentionHalf(nn.Module):
         return x + self.dropout(self.mu(y.transpose(1, 2).reshape(B, T, d)))
 
 
+class WindowAttentionHalf(AttentionHalf):
+    """AttentionHalf where each query sees only the last `window` keys (itself included): SDA's local attention.
+    With RoPE and a band this short, it behaves the same at any sequence length."""
+
+    def __init__(self, args, window=128):
+        super().__init__(args)
+        self.window = window
+
+    def forward(self, x):
+        B, T, d = x.shape
+        a = self.norm(x)
+        q, k, v = (w(a).view(B, T, self.h, HEAD_DIM).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
+        i = torch.arange(T, device=x.device)
+        band = (i[None, :] <= i[:, None]) & (i[None, :] > i[:, None] - self.window)
+        y = F.scaled_dot_product_attention(_rope(q), _rope(k), v, attn_mask=band)
+        return x + self.dropout(self.mu(y.transpose(1, 2).reshape(B, T, d)))
+
+
+class GatedDeltaHalf(nn.Module):
+    """Gated DeltaNet (Yang, Kautz, Hatamizadeh, ICLR 2025, arXiv 2412.06464) in place of attention: the GDN
+    baseline, a recurrent (SSM-family) Transformer. Per head, with unit q_t, k_t (q also scaled by 1/sqrt(dk)):
+        S_t = alpha_t (I - beta_t k_t k_t^T) S_{t-1} + beta_t k_t v_t^T,   o_t = S_t^T q_t
+        alpha_t = exp(-exp(A) softplus(W_a h + dt)),  beta_t = sigmoid(W_b h)
+    then o -> RMSNorm per head -> * SiLU(W_g h) -> output projection, as in the paper and fla's GatedDeltaNet.
+    q, k, v pass a causal depthwise conv (size 4) and SiLU. delta.delta_memory computes the recurrence (chunk 32);
+    log alpha is clamped at -2 per step so its within-chunk exp(-cumsum) stays finite in fp32."""
+
+    def __init__(self, args):
+        super().__init__()
+        d = args.dim
+        self.h = d // HEAD_DIM
+        self.norm = RMSNorm(d, eps=args.norm_eps)
+        self.wq, self.wk, self.wv, self.wg, self.mu = (nn.Linear(d, d, bias=False) for _ in range(5))
+        self.conv = nn.Conv1d(3 * d, 3 * d, 4, groups=3 * d, padding=3, bias=False)
+        self.wa, self.wb = nn.Linear(d, self.h, bias=False), nn.Linear(d, self.h, bias=False)
+        self.A_log = nn.Parameter(torch.empty(self.h).uniform_(1, 16).log())          # fla's init
+        dt = torch.exp(torch.rand(self.h) * (math.log(0.1) - math.log(1e-3)) + math.log(1e-3))
+        self.dt_shift = nn.Parameter(dt + torch.log(-torch.expm1(-dt)))                # softplus^-1(dt)
+        self.onorm = RMSNorm(HEAD_DIM, eps=args.norm_eps)
+        self.dropout = nn.Dropout(args.dropout)
+
+    def forward(self, x):
+        import delta
+        B, T, d = x.shape
+        H, hd = self.h, HEAD_DIM
+        a = self.norm(x)
+        qkv = torch.cat([self.wq(a), self.wk(a), self.wv(a)], -1).transpose(1, 2)
+        q, k, v = F.silu(self.conv(qkv)[..., :T]).transpose(1, 2).chunk(3, -1)
+        heads = lambda z: z.reshape(B, T, H, hd).transpose(1, 2).reshape(B * H, T, hd)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            q, k, v = (heads(_hi(z)) for z in (q, k, v))
+            q = F.normalize(q, dim=-1) / math.sqrt(hd)
+            k = F.normalize(k, dim=-1)
+            beta = torch.sigmoid(_hi(self.wb(a))).transpose(1, 2).reshape(B * H, T)
+            la = -self.A_log.exp() * F.softplus(_hi(self.wa(a)) + self.dt_shift)
+            la = la.clamp(min=-2.0).transpose(1, 2).reshape(B * H, T, 1).expand(B * H, T, hd)
+            o = delta.delta_memory(k, v, beta, la, q, chunk=32)
+        o = self.onorm(o.reshape(B, H, T, hd).transpose(1, 2)).reshape(B, T, d).type_as(x)
+        return x + self.dropout(self.mu(o * F.silu(self.wg(a))))
+
+
 class FeedForwardHalf(nn.Module):
     """The SwiGLU feed-forward half of a llama2.c layer; mu is its output projection (w2 in llama2.c)."""
 
@@ -159,6 +220,13 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SD2":  # SD plus a slow memory and a read mix
         import delta
         model.UnifiedBlock = delta.TwoDeltaBlock
+    elif variant == "SDA":  # hybrid: after every 4 SD blocks a local attention half (window 128); n_layers counts both
+        import delta
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: WindowAttentionHalf(args) if next(i) % 5 == 4 else delta.DeltaBlock(args)
+    elif variant == "GDN":  # baseline: T with Gated DeltaNet in place of attention
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: GatedDeltaHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
