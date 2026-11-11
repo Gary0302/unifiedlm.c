@@ -42,7 +42,11 @@ def main():
            "params": sum(p.numel() for p in net.parameters()), "val_shard": os.path.basename(val),
            "val": {str(L): ev.nll_by_position(net, L, a.batch, device, a.windows)}}
     print(json.dumps(res), flush=True)
-    res["val"][str(4 * L)] = ev.nll_by_position(net, 4 * L, max(1, a.batch // 4), device, a.windows // 4)
+    try:  # at L = 16K the 4L logits alone are 8 GB in fp32; a 24 GB card may not fit them, keep the L result anyway
+        res["val"][str(4 * L)] = ev.nll_by_position(net, 4 * L, max(1, a.batch // 4), device, a.windows // 4)
+    except torch.OutOfMemoryError:
+        torch.cuda.empty_cache()
+        res["val"][str(4 * L)] = {"skipped": "out of memory"}
     print(json.dumps(res["val"][str(4 * L)]), flush=True)
     json.dump(res, open(os.path.join(a.out_dir, "eval.json"), "w"), indent=1)
 
