@@ -2,6 +2,8 @@
 # Runs line JOB_COMPLETION_INDEX of a plan file, "<name> <flags...>". Trains on local disk, then publishes the
 # finished run to the PVC with a rename, so a run directory on the PVC is always complete.
 set -euo pipefail
+# compiled graphs and kernels are cached on the PVC, so a variant compiles once per GPU type instead of once per run
+export TORCHINDUCTOR_CACHE_DIR=/workspace/cache/inductor TORCHINDUCTOR_FX_GRAPH_CACHE=1 TORCHINDUCTOR_AUTOGRAD_CACHE=1
 
 PLAN=$1
 LINE=$(sed -n "$((JOB_COMPLETION_INDEX + 1))p" "scripts/nrp/$PLAN")
