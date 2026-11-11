@@ -74,18 +74,24 @@ def gated_memory(r, v, logl, w, chunk=CHUNK):
 
 class GatedBlock(UnifiedBlock):
 
-    def __init__(self, args, rank=RANK):
+    def __init__(self, args, rank=RANK, gate_from="r", silu=False):
+        """gate_from="h" reads the gate off the block input h = norm(x) instead of the address r (SGh);
+        silu=True puts a SiLU between Q and P, a two-layer MLP gate (SGs)."""
         super().__init__(args)
         m = args.hidden_dim
+        self.gate_from, self.silu = gate_from, silu
         self.log_rate = nn.Parameter(torch.full((m,), math.log(1.0 / (4 * args.max_seq_len))))
-        self.gate_q = nn.Linear(m, rank, bias=False)
+        self.gate_q = nn.Linear(m if gate_from == "r" else args.dim, rank, bias=False)
         self.gate_p = nn.Linear(rank, m, bias=True)
         self.log_beta = nn.Parameter(torch.tensor(-7.0))
 
-    def log_decay(self, r):
+    def log_decay(self, r, h=None):
         k = F.pad(r[:, :-1], (0, 0, 1, 0))
-        rn = r * torch.rsqrt(r.square().mean(-1, keepdim=True) + 1e-12)
-        g = F.softplus(_hi(self.gate_p(self.gate_q(rn)))) / math.log(2.0)
+        z = r * torch.rsqrt(r.square().mean(-1, keepdim=True) + 1e-12) if self.gate_from == "r" else _hi(h)
+        z = self.gate_q(z)
+        if self.silu:
+            z = F.silu(z)
+        g = F.softplus(_hi(self.gate_p(z))) / math.log(2.0)
         x = self.log_rate.exp() * g + self.log_beta.exp() * k
         return torch.expm1(-x)
 
@@ -97,7 +103,7 @@ class GatedBlock(UnifiedBlock):
         w = self._w()
         with torch.autocast(device_type=x.device.type, enabled=False):
             r, v = _hi(r), _hi(v)
-            q, fast = gated_memory(r, v, self.log_decay(r), w.to(r.dtype))
+            q, fast = gated_memory(r, v, self.log_decay(r, h), w.to(r.dtype))
         return x + self.dropout(self.mu((q * w).type_as(x)) + fast.type_as(x))
 
     def step(self, x, s):
@@ -111,7 +117,7 @@ class RateBlock(GatedBlock):
         super().__init__(args)
         del self.gate_q, self.gate_p, self.log_beta
 
-    def log_decay(self, r):
+    def log_decay(self, r, h=None):
         return torch.expm1(-self.log_rate.exp()).expand_as(r)
 
 

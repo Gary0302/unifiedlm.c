@@ -45,7 +45,7 @@ def main():
         rate = layer.log_rate.detach().exp().flatten()
         hz = 1 / rate
         out["layers"].append({"base_horizon_median": q(hz, .5), "base_horizon_p10": q(hz, .1), "base_horizon_p90": q(hz, .9)})
-    if meta["variant"] in ("SG", "SG64", "SR", "SD", "SD2"):
+    if meta["variant"] in ("SG", "SG64", "SGh", "SGs", "SR", "SD", "SD2"):
         val = np.memmap(sorted(glob.glob(os.path.join(fineweb_subset.fineweb.DATA_DIR, "*.bin")))[-1], dtype=np.uint16, mode="r")
         x = torch.from_numpy(np.stack([val[j * L:(j + 1) * L].astype(np.int64) for j in range(a.windows)])).cuda()
         start = torch.zeros_like(x, dtype=torch.bool)
@@ -53,7 +53,7 @@ def main():
         rec = []
         for layer in net.layers:
             f = layer.log_decay
-            layer.log_decay = (lambda f: lambda r: (rec.append(f(r).detach()), rec[-1])[1])(f)
+            layer.log_decay = (lambda f: lambda *a: (rec.append(f(*a).detach()), rec[-1])[1])(f)
         with torch.no_grad():
             for i in range(0, a.windows, 8):
                 net(x[i:i + 8], x[i:i + 8])
@@ -67,7 +67,7 @@ def main():
             s["horizon_token_p90"] = 1 / q(per_tok, .1)
             s["forget_doc_start"] = per_tok[start].mean().item() if start.any() else None
             s["forget_other"] = per_tok[~start].mean().item()
-            if meta["variant"] in ("SG", "SG64"):
+            if meta["variant"] in ("SG", "SG64", "SGh", "SGs"):
                 s["beta"] = layer.log_beta.exp().item()
         out["doc_starts"] = int(start.sum())
     print(json.dumps(out), flush=True)

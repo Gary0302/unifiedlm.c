@@ -78,7 +78,7 @@ def main():
                 rec["_i"] = i + 1
                 return q, fast
             return f
-        if meta["variant"] in ("SG", "SG64", "SR"):
+        if meta["variant"] in ("SG", "SG64", "SGh", "SGs", "SR"):
             import gated
             gated.gated_memory = wrap(gated.gated_memory, None)
         else:

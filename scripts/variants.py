@@ -141,6 +141,12 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SG64":  # SG with a rank-64 gate bottleneck
         import gated
         model.UnifiedBlock = lambda args: gated.GatedBlock(args, rank=64)
+    elif variant == "SGh":  # SG with the gate read off the block input h instead of the address r
+        import gated
+        model.UnifiedBlock = lambda args: gated.GatedBlock(args, gate_from="h")
+    elif variant == "SGs":  # SG with a SiLU inside the rank-16 gate (a two-layer MLP gate)
+        import gated
+        model.UnifiedBlock = lambda args: gated.GatedBlock(args, silu=True)
     elif variant == "SR":  # SG's ablation: per-slot rates, no gate
         import gated
         model.UnifiedBlock = gated.RateBlock
