@@ -37,6 +37,7 @@ def main():
     ev.DATA_DIR = tempfile.mkdtemp()
     os.symlink(os.path.abspath(val), os.path.join(ev.DATA_DIR, "val.bin"))
     L = ckpt["model_args"]["max_seq_len"]
+    a.batch = max(1, a.batch * 1024 // L)  # --batch is for L = 1024; keep tokens per batch (and the logits) fixed
     res = {"variant": meta["variant"], "seed": ckpt["config"]["seed"], "iter_num": ckpt["iter_num"],
            "params": sum(p.numel() for p in net.parameters()), "val_shard": os.path.basename(val),
            "val": {str(L): ev.nll_by_position(net, L, a.batch, device, a.windows)}}
