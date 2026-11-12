@@ -180,3 +180,28 @@ class TwoFastDeltaBlock(DeltaBlock):
             rho = torch.sigmoid(_lin(self.rho, h))
             mem = (1 - rho) * one + rho * two
         return x + self.dropout(self.mu(r.type_as(x)) + mem.type_as(x))
+
+
+class FixedPowerDeltaBlock(DeltaBlock):
+    """SD with the address power fixed at p instead of 2: r = relu(K u + b)^p / (eps + sum). SDr uses p = 1 (plain
+    ReLU, a blunter, denser address) in the first blocks, where the fast memory lives, and SD's p = 2 above."""
+
+    def __init__(self, args, p):
+        super().__init__(args)
+        self.p = p
+
+    def code(self, u):
+        z = F.relu(_hi(self.key(u)))
+        z = z if self.p == 1 else z.pow(self.p)
+        return z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True))
+
+
+class WideRateDeltaBlock(DeltaBlock):
+    """SDw: SD with the per-slot base forgetting rates started log-uniformly between 1/(L/4) and 1/(16 L) instead
+    of all at 1/(4 L), so one memory starts with fast and slow slots (SD2's slow memory sits at 1/(16 L))."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        L, m = args.max_seq_len, args.hidden_dim
+        with torch.no_grad():
+            self.log_rate.copy_(torch.linspace(math.log(4.0 / L), math.log(1.0 / (16 * L)), m))

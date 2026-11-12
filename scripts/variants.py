@@ -327,6 +327,13 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDp":  # SD with a learnable address power per layer (sharpness), from 2
         import delta
         model.UnifiedBlock = delta.PowerDeltaBlock
+    elif variant == "SDr":  # SD with plain ReLU addresses (p = 1) in the first 4 blocks, relu^2 above
+        import delta
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: delta.FixedPowerDeltaBlock(args, 1) if next(i) < 4 else delta.DeltaBlock(args)
+    elif variant == "SDw":  # SD with per-slot base rates spread from 1/(L/4) to 1/(16 L): fast and slow slots in one memory
+        import delta
+        model.UnifiedBlock = delta.WideRateDeltaBlock
     elif variant == "SD2":  # SD plus a slow memory and a read mix
         import delta
         model.UnifiedBlock = delta.TwoDeltaBlock
