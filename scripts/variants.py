@@ -232,6 +232,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SD":  # S with a delta-rule memory anchored at the FFN, scripts/delta.py
         import delta
         model.UnifiedBlock = delta.DeltaBlock
+    elif variant == "SDp":  # SD with a learnable address power per layer (sharpness), from 2
+        import delta
+        model.UnifiedBlock = delta.PowerDeltaBlock
     elif variant == "SD2":  # SD plus a slow memory and a read mix
         import delta
         model.UnifiedBlock = delta.TwoDeltaBlock

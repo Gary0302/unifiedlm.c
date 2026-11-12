@@ -110,6 +110,21 @@ class DeltaBlock(GatedBlock):
         raise NotImplementedError("token-by-token SD lives in scripts/check_delta.py until SD wins")
 
 
+class PowerDeltaBlock(DeltaBlock):
+    """SDp: SD with a learnable address sharpness per layer, r = relu(K u + b)^p / (eps + sum), p = 1 + e^a from 2.
+    relu^2 over its sum is scale-invariant, so SD's sharpness is fixed at p = 2; here the layer can learn it."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.log_pm1 = nn.Parameter(torch.zeros(()))
+
+    def code(self, u):
+        s = F.relu(_hi(self.key(u)))
+        p = 1.0 + self.log_pm1.clamp(-5.0, 2.0).exp()
+        z = torch.where(s > 0, s.clamp_min(1e-30).pow(p), torch.zeros_like(s))
+        return z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True))
+
+
 class TwoDeltaBlock(DeltaBlock):
     """SD2: SD plus a slow memory with constant per-slot rates, its own write strength, and a read mix."""
 
