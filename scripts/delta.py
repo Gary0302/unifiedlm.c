@@ -148,3 +148,35 @@ class TwoDeltaBlock(DeltaBlock):
             rho = torch.sigmoid(_lin(self.rho, h))
             mem = (1 - rho) * fast + rho * slow
         return x + self.dropout(self.mu(r.type_as(x)) + mem.type_as(x))
+
+
+class TwoFastDeltaBlock(DeltaBlock):
+    """SD2c, SD2's control: the second memory is another copy of the first (its own gated per-slot decay started at
+    1/(4 L), its own write strength), read through the same mix rho. Same state as SD2, no fast/slow split."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        m, rank = args.hidden_dim, self.gate_q.out_features
+        self.log_rate2 = nn.Parameter(torch.full((m,), math.log(1.0 / (4 * args.max_seq_len))))
+        self.gate_q2 = nn.Linear(m, rank, bias=False)
+        self.gate_p2 = nn.Linear(rank, m, bias=True)
+        self.beta2 = nn.Linear(args.dim, 1, bias=True)
+        self.rho = nn.Linear(args.dim, 1, bias=True)
+
+    def log_decay2(self, r):
+        rn = r * torch.rsqrt(r.square().mean(-1, keepdim=True) + 1e-12)
+        g = F.softplus(_hi(self.gate_p2(self.gate_q2(rn)))) / math.log(2.0)
+        return torch.expm1(-self.log_rate2.exp() * g)
+
+    def forward(self, x):
+        h, r, v = self._inputs(x)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            r, v = _hi(r), _hi(v)
+            k = F.pad(r[:, :-1], (0, 0, 1, 0))
+            target = v - F.linear(k, _hi(self.mu.weight))
+            kh, qh = _unit(k), _unit(r)
+            one = delta_memory(kh, target, torch.sigmoid(_lin(self.beta, h)).squeeze(-1), self.log_decay(r), qh)
+            two = delta_memory(kh, target, torch.sigmoid(_lin(self.beta2, h)).squeeze(-1), self.log_decay2(r), qh)
+            rho = torch.sigmoid(_lin(self.rho, h))
+            mem = (1 - rho) * one + rho * two
+        return x + self.dropout(self.mu(r.type_as(x)) + mem.type_as(x))

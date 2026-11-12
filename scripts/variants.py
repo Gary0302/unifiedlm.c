@@ -238,6 +238,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SD2":  # SD plus a slow memory and a read mix
         import delta
         model.UnifiedBlock = delta.TwoDeltaBlock
+    elif variant == "SD2c":  # SD2's control: two memories like SD's, same state as SD2, no fast/slow split
+        import delta
+        model.UnifiedBlock = delta.TwoFastDeltaBlock
     elif variant == "SDA":  # hybrid: after every 4 SD blocks a local attention half (window 128); n_layers counts both
         import delta
         i = itertools.count()
@@ -250,6 +253,10 @@ def install(variant, m_s=0, m_f=0):
         import delta
         i = itertools.count()
         model.UnifiedBlock = lambda args: GatedDeltaHalf(args, soft=True) if next(i) % 2 == 0 else FeedForwardHalf(args)
+    elif variant == "MESA":  # baseline: T with the Mesa layer (exact least squares per token) in place of attention
+        import mesa
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: mesa.MesaHalf(args, HEAD_DIM) if next(i) % 2 == 0 else FeedForwardHalf(args)
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
