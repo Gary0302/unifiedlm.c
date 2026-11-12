@@ -99,25 +99,46 @@ class CausalConv(nn.Module):
         return self.conv(x.transpose(1, 2))[..., : x.size(1)].transpose(1, 2)
 
 
+LOGN = None   # evaluation only: Qwen's log-n scaling for T past its training length L, q_t *= max(1, log n_t / log L)
+
+
 class AttentionHalf(nn.Module):
     """The attention half of a llama2.c layer. The output projection is named mu so that UnifiedLM's init scales
     it to 0.02/sqrt(n_layers), which with two blocks per layer is GPT-2's scaling of residual projections.
-    conv=True (TC) passes the normed input through SD's causal conv before q, k, v."""
+    conv=True (TC) passes the normed input through SD's causal conv before q, k, v.
+    ssmax=True (TS) is Scalable-Softmax (Nakanishi 2025, arXiv 2501.19399): the logits of a query that sees n keys
+    are multiplied by s log n, s learnable per head, started at 1 / log L so that at n = L it is the usual softmax."""
 
-    def __init__(self, args, conv=False):
+    def __init__(self, args, conv=False, ssmax=False):
         super().__init__()
         d = args.dim
         self.h = d // HEAD_DIM
         self.norm = RMSNorm(d, eps=args.norm_eps)
         self.mix = CausalConv(d) if conv else nn.Identity()
         self.wq, self.wk, self.wv, self.mu = (nn.Linear(d, d, bias=False) for _ in range(4))
+        self.ssmax = ssmax
+        if ssmax:
+            self.s = nn.Parameter(torch.full((self.h,), 1.0 / math.log(args.max_seq_len)))
         self.dropout = nn.Dropout(args.dropout)
+
+    def _scale(self, q, window=None):
+        """SSMax and LOGN on q (B, h, T, hd); n_t = t + 1 keys, at most `window` under a sliding window."""
+        if not (self.ssmax or LOGN):
+            return q
+        n = torch.arange(1, q.size(2) + 1, device=q.device, dtype=torch.float32)
+        if window:
+            n = n.clamp(max=window)
+        if self.ssmax:
+            q = q * (self.s[:, None] * n.log())[:, :, None].to(q.dtype)
+        if LOGN:
+            q = q * (n.log() / math.log(LOGN)).clamp(min=1.0)[:, None].to(q.dtype)
+        return q
 
     def forward(self, x):
         B, T, d = x.shape
         a = self.mix(self.norm(x))
         q, k, v = (w(a).view(B, T, self.h, HEAD_DIM).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
-        y = F.scaled_dot_product_attention(_rope(q), _rope(k), v, is_causal=True)
+        y = F.scaled_dot_product_attention(_rope(self._scale(q)), _rope(k), v, is_causal=True)
         return x + self.dropout(self.mu(y.transpose(1, 2).reshape(B, T, d)))
 
 
@@ -335,6 +356,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
+    elif variant == "TS":  # T with Scalable-Softmax in every attention half
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: AttentionHalf(args, ssmax=True) if next(i) % 2 == 0 else FeedForwardHalf(args)
     elif variant == "TC":  # control: T with SD's causal conv before attention
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args, conv=True) if next(i) % 2 == 0 else FeedForwardHalf(args)

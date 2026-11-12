@@ -47,6 +47,7 @@ def main():
     ap.add_argument("--mult", type=int, default=16, help="window length in units of the training length L")
     ap.add_argument("--windows", type=int, default=64)
     ap.add_argument("--window", action="store_true", help="T only: also evaluate with a sliding window of L")
+    ap.add_argument("--logn", action="store_true", help="T only: also evaluate the full context with log-n scaling")
     a = ap.parse_args()
     device = "cuda"
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -61,6 +62,11 @@ def main():
     out = {"run": os.path.basename(a.out_dir.rstrip("/")), "variant": meta["variant"], "seed": ckpt["config"]["seed"],
            "L": L, "T": T, "windows": a.windows, "full": run(net, val, T, a.windows, device)}
     print(json.dumps(out), flush=True)
+    if a.logn:   # full context again, with log-n scaling past L
+        variants.LOGN = L
+        out["logn"] = run(net, val, T, a.windows, device)
+        variants.LOGN = None
+        print(json.dumps(out["logn"]), flush=True)
     if a.window:
         q = torch.arange(T, device=device)
         band = (q[None, :] <= q[:, None]) & (q[None, :] > q[:, None] - L)   # key within the last L positions
@@ -69,7 +75,7 @@ def main():
             B, T_, d = x.shape
             h = self.mix(self.norm(x))
             qq, k, v = (w(h).view(B, T_, self.h, variants.HEAD_DIM).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
-            y = F.scaled_dot_product_attention(variants._rope(qq), variants._rope(k), v, attn_mask=band[:T_, :T_])
+            y = F.scaled_dot_product_attention(variants._rope(self._scale(qq, window=L)), variants._rope(k), v, attn_mask=band[:T_, :T_])
             return x + self.mu(y.transpose(1, 2).reshape(B, T_, d))
         variants.AttentionHalf.forward = attn
         out["window"] = run(net, val, T, a.windows, device)
