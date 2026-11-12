@@ -334,6 +334,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDw":  # SD with per-slot base rates spread from 1/(L/4) to 1/(16 L): fast and slow slots in one memory
         import delta
         model.UnifiedBlock = delta.WideRateDeltaBlock
+    elif variant == "SDl":  # SD with a 10x learning rate on the per-slot base rates (log_rate), by reparametrization
+        import delta
+        model.UnifiedBlock = delta.FastRateDeltaBlock
     elif variant == "SD2":  # SD plus a slow memory and a read mix
         import delta
         model.UnifiedBlock = delta.TwoDeltaBlock

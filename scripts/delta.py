@@ -196,6 +196,21 @@ class FixedPowerDeltaBlock(DeltaBlock):
         return z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True))
 
 
+class FastRateDeltaBlock(DeltaBlock):
+    """SDl: SD with log_rate stored as log_rate / 10, so Adam (step ~ lr in the stored units, no weight decay on 1-D
+    tensors) moves log_rate 10x as fast; same start (all at 1/(4 L)), same everything else."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        r = self.log_rate.detach().clone()
+        del self.log_rate
+        self.log_rate_s = nn.Parameter(r / 10.0)
+
+    @property
+    def log_rate(self):
+        return self.log_rate_s * 10.0
+
+
 class WideRateDeltaBlock(DeltaBlock):
     """SDw: SD with the per-slot base forgetting rates started log-uniformly between 1/(L/4) and 1/(16 L) instead
     of all at 1/(4 L), so one memory starts with fast and slow slots (SD2's slow memory sits at 1/(16 L))."""
