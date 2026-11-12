@@ -184,6 +184,77 @@ class GatedDeltaHalf(nn.Module):
         return x + self.dropout(self.mu(o * F.silu(self.wg(a))))
 
 
+def erase_write_memory(k, e, z, logl, q, chunk=32):
+    """Gated Delta Rule-2: k: (B,T,dk) unit write keys, e = b * k erase keys, z = w * v gated values (B,T,dv),
+    logl: (B,T,dk) channel-wise log decay, q: (B,T,dk). With S_0 = 0 and D_t = diag(exp(logl_t)),
+        S_t = (I - k_t e_t^T) D_t S_{t-1} + k_t z_t^T = D_t S_{t-1} + k_t delta_t^T,  delta_t = z_t - (D_t S_{t-1})^T e_t,
+    o_t = S_t^T q_t. delta.delta_memory with the erase key and the write strength split; e = beta k, z = beta u gives it."""
+    B, T, m = k.shape
+    d = z.size(-1)
+    pad = (-T) % chunk
+    if pad:
+        k, e, z, logl, q = (F.pad(x, (0, 0, 0, pad)) for x in (k, e, z, logl, q))
+    N = (T + pad) // chunk
+    kc, ec, zc, lc, qc = (x.reshape(B, N, chunk, -1) for x in (k, e, z, logl, q))
+    b = lc.cumsum(2)
+    bl = b[:, :, -1]
+    ed = ec * torch.exp(b)                    # D_i e_i
+    ki = kc * torch.exp(-b)                   # D_j^-1 k_j
+    qd = qc * torch.exp(b)
+    ks = kc * torch.exp(bl[:, :, None] - b)
+    eye = torch.eye(chunk, device=k.device, dtype=k.dtype)
+    A = (ed @ ki.transpose(-1, -2)).tril(-1)  # A_ij = D_i e_i . D_j^-1 k_j, j < i
+    M = torch.linalg.solve_triangular(eye + A, eye.expand_as(A), upper=False, unitriangular=True)
+    PU, PK = M @ zc, M @ ed
+    Q = (qd @ ki.transpose(-1, -2)).tril()
+    el = torch.exp(bl)
+    S = k.new_zeros(B, m, d)
+    out = []
+    for n in range(N):
+        delta = PU[:, n] - PK[:, n] @ S
+        out.append(qd[:, n] @ S + Q[:, n] @ delta)
+        S = el[:, n, :, None] * S + ks[:, n].transpose(-1, -2) @ delta
+    return torch.stack(out, 1).reshape(B, N * chunk, d)[:, :T]
+
+
+class GatedDeltaNet2Half(GatedDeltaHalf):
+    """Gated DeltaNet-2 (Hatamizadeh, Choi, Kautz, NeurIPS 2026, arXiv 2605.22791) in place of attention: GDN with
+    the scalar beta split into a channel-wise erase gate b_t = sigmoid(W_b h) over key channels and a write gate
+    w_t = sigmoid(W_w h) over value channels, and KDA's channel-wise decay
+        g_t = -exp(a) * softplus(W_f h + delta)  (a per head, delta per key channel),
+        S_t = (I - k_t (b_t * k_t)^T) diag(exp(g_t)) S_{t-1} + k_t (w_t * v_t)^T.
+    The three gate projections are low-rank (d -> head_dim -> d, as fla's KDA), so the layer costs about 80K more
+    parameters than GDN's instead of 250K. Everything else as GatedDeltaHalf (conv + SiLU, unit q and k, RMSNorm per
+    head, SiLU output gate); g is clamped
+    at -2 per step like GDN's log alpha, for the same within-chunk exp(-cumsum) reason."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        d = args.dim
+        del self.wa, self.wb, self.dt_shift
+        low_rank = lambda: nn.Sequential(nn.Linear(d, HEAD_DIM, bias=False), nn.Linear(HEAD_DIM, d, bias=False))
+        self.wf, self.wb, self.ww = low_rank(), low_rank(), low_rank()   # rank head_dim, as fla's KDA gates
+        dt = torch.exp(torch.rand(d) * (math.log(0.1) - math.log(1e-3)) + math.log(1e-3))
+        self.dt_shift = nn.Parameter(dt + torch.log(-torch.expm1(-dt)))                # per key channel
+
+    def forward(self, x):
+        B, T, d = x.shape
+        H, hd = self.h, HEAD_DIM
+        a = self.norm(x)
+        qkv = torch.cat([self.wq(a), self.wk(a), self.wv(a)], -1).transpose(1, 2)
+        q, k, v = F.silu(self.conv(qkv)[..., :T]).transpose(1, 2).chunk(3, -1)
+        heads = lambda z: z.reshape(B, T, H, hd).transpose(1, 2).reshape(B * H, T, hd)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            q, k, v = (heads(_hi(z)) for z in (q, k, v))
+            q = F.normalize(q, dim=-1) / math.sqrt(hd)
+            k = F.normalize(k, dim=-1)
+            bg, wg = (heads(torch.sigmoid(_hi(w(a)))) for w in (self.wb, self.ww))
+            g = -self.A_log.exp().repeat_interleave(hd) * F.softplus(_hi(self.wf(a)) + self.dt_shift)
+            o = erase_write_memory(k, bg * k, wg * v, heads(g.clamp(min=-2.0)), q)
+        o = self.onorm(o.reshape(B, H, T, hd).transpose(1, 2)).reshape(B, T, d).type_as(x)
+        return x + self.dropout(self.mu(o * F.silu(self.wg(a))))
+
+
 class FeedForwardHalf(nn.Module):
     """The SwiGLU feed-forward half of a llama2.c layer; mu is its output projection (w2 in llama2.c)."""
 
@@ -257,6 +328,10 @@ def install(variant, m_s=0, m_f=0):
         import mesa
         i = itertools.count()
         model.UnifiedBlock = lambda args: mesa.MesaHalf(args, HEAD_DIM) if next(i) % 2 == 0 else FeedForwardHalf(args)
+    elif variant == "GDN2":  # baseline: T with Gated DeltaNet-2 in place of attention
+        import delta
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: GatedDeltaNet2Half(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
