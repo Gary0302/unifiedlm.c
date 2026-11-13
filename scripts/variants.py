@@ -340,6 +340,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDu":  # SD with the static half on the unnormalized relu^2 code (a plain ReLU^2 FFN)
         import delta
         model.UnifiedBlock = delta.RawFFNDeltaBlock
+    elif variant == "SDul":  # SDu with SDl1000's 1000x learning rate on log_rate
+        import delta
+        model.UnifiedBlock = delta.RawFFNFastRate1000DeltaBlock
     elif variant == "SDb":  # SD with the memory emptied at every BOS
         import delta
         model.UnifiedBlock = delta.DocResetDeltaBlock

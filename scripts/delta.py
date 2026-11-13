@@ -251,6 +251,10 @@ class RawFFNDeltaBlock(DeltaBlock):
         return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
 
 
+class RawFFNFastRate1000DeltaBlock(RawFFNDeltaBlock, FastRate1000DeltaBlock):
+    """SDul: SDu (static half on the unnormalized code) with SDl1000's log_rate learning 1000x as fast."""
+
+
 BOS = 1   # llama2 tokenizer: every document starts with BOS
 
 
