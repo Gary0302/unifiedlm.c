@@ -32,17 +32,19 @@ from gated import CHUNK, GatedBlock
 from model import _hi
 
 
-def delta_memory(k, u, beta, logl, q, chunk=CHUNK):
+def delta_memory(k, u, beta, logl, q, chunk=CHUNK, reset=None):
     """k: (B,T,m) unit write keys, u: (B,T,d) write targets, beta: (B,T) in [0, 1], logl: (B,T,m) log decay applied
     at step t (in [-1, 0]), q: (B,T,m) read addresses. With E_0 = 0,
         E_t = (I - beta_t k_t k_t^T) diag(lam_t) E_{t-1} + beta_t k_t u_t^T,   o_t = E_t^T q_t.
-    Equivalently E_t = diag(lam_t) E_{t-1} + k_t delta_t^T with delta_t = beta_t (u_t - E_{t-1}^T diag(lam_t) k_t)."""
+    Equivalently E_t = diag(lam_t) E_{t-1} + k_t delta_t^T with delta_t = beta_t (u_t - E_{t-1}^T diag(lam_t) k_t).
+    reset (B,T) bool, SDb: lam_t = 0 where set (E_{t-1} is dropped), by masking the terms that cross a reset."""
     B, T, m = k.shape
     d = u.size(-1)
     pad = (-T) % chunk
     if pad:
         k, u, logl, q = (F.pad(x, (0, 0, 0, pad)) for x in (k, u, logl, q))
         beta = F.pad(beta, (0, pad))
+        reset = None if reset is None else F.pad(reset, (0, pad))
     N = (T + pad) // chunk
     kc, uc, lc, qc = (x.reshape(B, N, chunk, -1) for x in (k, u, logl, q))
     bc = beta.reshape(B, N, chunk)
@@ -54,11 +56,20 @@ def delta_memory(k, u, beta, logl, q, chunk=CHUNK):
     ks = kc * torch.exp(bl[:, :, None] - b)   # D_last D_j^-1 k_j
     eye = torch.eye(chunk, device=k.device, dtype=k.dtype)
     A = (bc[..., None] * (kd @ ki.transpose(-1, -2))).tril(-1)   # A_ij = beta_i (D_i k_i . D_j^-1 k_j), j < i
-    M = torch.linalg.solve_triangular(eye + A, eye.expand_as(A), upper=False, unitriangular=True)
-    W = M * bc[:, :, None, :]                 # (I + A)^-1 diag(beta): delta = W (U - KD E_0)
-    PU, PK = W @ uc, W @ kd
     Q = (qd @ ki.transpose(-1, -2)).tril()    # Q_ij = D_i q_i . D_j^-1 k_j, j <= i
     el = torch.exp(bl)
+    kd0 = kd
+    if reset is not None:
+        seg = reset.reshape(B, N, chunk).long().cumsum(2)              # resets so far in the chunk, step i included
+        same = (seg[..., :, None] == seg[..., None, :]).to(k.dtype)    # no reset in (j, i]
+        first = (seg == 0).to(k.dtype)[..., None]                      # step i still sees the state entering the chunk
+        A, Q = A * same, Q * same
+        kd0, qd = kd * first, qd * first
+        ks = ks * (seg == seg[..., -1:]).to(k.dtype)[..., None]       # steps carried into the next chunk
+        el = el * (seg[..., -1] == 0).to(k.dtype)[..., None]
+    M = torch.linalg.solve_triangular(eye + A, eye.expand_as(A), upper=False, unitriangular=True)
+    W = M * bc[:, :, None, :]                 # (I + A)^-1 diag(beta): delta = W (U - KD E_0)
+    PU, PK = W @ uc, W @ kd0
     E = k.new_zeros(B, m, d)
     out = []
     for n in range(N):
@@ -219,6 +230,61 @@ class FastRate100DeltaBlock(FastRateDeltaBlock):
 
 class FastRate1000DeltaBlock(FastRateDeltaBlock):
     FACTOR = 1000.0
+
+
+class RawFFNDeltaBlock(DeltaBlock):
+    """SDu: SD whose static half reads the unnormalized code z = relu(K u + b)^2 (a plain ReLU^2 FFN, which keeps how
+    strongly a token fires), y = mu z + E^T q; the memory keeps the normalized address r = z / (eps + sum z) and the
+    write target v - mu k with k = r_{t-1}, as in SD."""
+
+    def forward(self, x):
+        h = self.norm(x)
+        u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        s, v = self.key(u), self.val(h)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            z = F.relu(_hi(s)).square()
+            r, v = z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True)), _hi(v)
+            k = F.pad(r[:, :-1], (0, 0, 1, 0))
+            target = v - F.linear(k, _hi(self.mu.weight))
+            beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
+            fast = delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r))
+        return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+
+BOS = 1   # llama2 tokenizer: every document starts with BOS
+
+
+class DocResetDeltaBlock(DeltaBlock):
+    """SDb: SD whose memory is emptied at every BOS (lam = 0 and beta = 0 there), so nothing written in one
+    document is read in the next. doc_reset_forward (installed as UnifiedLM.forward) passes the BOS mask."""
+
+    def forward(self, x, reset=None):
+        h, r, v = self._inputs(x)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            r, v = _hi(r), _hi(v)
+            k = F.pad(r[:, :-1], (0, 0, 1, 0))
+            target = v - F.linear(k, _hi(self.mu.weight))
+            beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
+            if reset is not None:
+                beta = beta * (~reset).to(beta.dtype)
+            fast = delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r), reset=reset)
+        return x + self.dropout(self.mu(r.type_as(x)) + fast.type_as(x))
+
+
+def doc_reset_forward(self, tokens, targets=None):
+    """UnifiedLM.forward with the BOS mask passed to every block (SDb)."""
+    reset = tokens == BOS
+    h = self.dropout(self.tok_embeddings(tokens))
+    for layer in self.layers:
+        h = layer(h, reset)
+    h = self.norm(h)
+    if targets is not None:
+        logits = self.output(h)
+        self.last_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+    else:
+        logits = self.output(h[:, [-1], :])
+        self.last_loss = None
+    return logits
 
 
 class DiverseRateDeltaBlock(DeltaBlock):
