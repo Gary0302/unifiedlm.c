@@ -198,17 +198,27 @@ class FixedPowerDeltaBlock(DeltaBlock):
 
 class FastRateDeltaBlock(DeltaBlock):
     """SDl: SD with log_rate stored as log_rate / 10, so Adam (step ~ lr in the stored units, no weight decay on 1-D
-    tensors) moves log_rate 10x as fast; same start (all at 1/(4 L)), same everything else."""
+    tensors) moves log_rate 10x as fast; same start (all at 1/(4 L)), same everything else.
+    SDl100 and SDl1000 use 100 and 1000 instead of 10."""
+    FACTOR = 10.0
 
     def __init__(self, args):
         super().__init__(args)
         r = self.log_rate.detach().clone()
         del self.log_rate
-        self.log_rate_s = nn.Parameter(r / 10.0)
+        self.log_rate_s = nn.Parameter(r / self.FACTOR)
 
     @property
     def log_rate(self):
-        return self.log_rate_s * 10.0
+        return self.log_rate_s * self.FACTOR
+
+
+class FastRate100DeltaBlock(FastRateDeltaBlock):
+    FACTOR = 100.0
+
+
+class FastRate1000DeltaBlock(FastRateDeltaBlock):
+    FACTOR = 1000.0
 
 
 class WideRateDeltaBlock(DeltaBlock):
