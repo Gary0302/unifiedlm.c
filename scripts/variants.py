@@ -337,6 +337,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDl":  # SD with a 10x learning rate on the per-slot base rates (log_rate), by reparametrization
         import delta
         model.UnifiedBlock = delta.FastRateDeltaBlock
+    elif variant == "SDv":  # SD with base horizons spread from 4 to 64 L and a gate bounded in (0, 2): diverse lambda
+        import delta
+        model.UnifiedBlock = delta.DiverseRateDeltaBlock
     elif variant in ("SDl100", "SDl1000"):  # SDl with 100x / 1000x
         import delta
         model.UnifiedBlock = delta.FastRate100DeltaBlock if variant == "SDl100" else delta.FastRate1000DeltaBlock

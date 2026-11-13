@@ -221,6 +221,23 @@ class FastRate1000DeltaBlock(FastRateDeltaBlock):
     FACTOR = 1000.0
 
 
+class DiverseRateDeltaBlock(DeltaBlock):
+    """SDv: per-slot base horizons log-uniform from 4 to 64 L tokens, and a bounded gate g = 2 sigmoid(.) in (0, 2)
+    instead of softplus (unbounded), so the gate can slow a slot down freely but speed it up at most 2x: the spread
+    survives training (SDw's gate sped its slow slots up ~25x). g = 1 at the start, as in SD."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        L, m = args.max_seq_len, args.hidden_dim
+        with torch.no_grad():
+            self.log_rate.copy_(torch.linspace(math.log(1.0 / 4), math.log(1.0 / (64 * L)), m))
+
+    def log_decay(self, r):
+        rn = r * torch.rsqrt(r.square().mean(-1, keepdim=True) + 1e-12)
+        g = 2.0 * torch.sigmoid(_hi(self.gate_p(self.gate_q(rn))))
+        return torch.expm1(-self.log_rate.exp() * g)
+
+
 class WideRateDeltaBlock(DeltaBlock):
     """SDw: SD with the per-slot base forgetting rates started log-uniformly between 1/(L/4) and 1/(16 L) instead
     of all at 1/(4 L), so one memory starts with fast and slow slots (SD2's slow memory sits at 1/(16 L))."""
