@@ -57,6 +57,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 | 變體 | 改了什麼 | 15M |
 | --- | --- | ---: |
+| [U-Delta-rawFFN+λlr1000+carry](docs/variants/u-delta-rawffn-lambda-lr1000-carry.md) | U-Delta-rawFFN+λlr1000 訓練時記憶跨窗口接續：每個窗口從同一串上一個窗口結束的記憶開始（梯度不跨窗口），評測照舊從空記憶開始。 | 3.815 |
 | [U-Delta-λlr10](docs/variants/u-delta-lambda-lr10.md) | U-Delta 的每格基礎遺忘率 `log_rate` 有效學習率 ×10（重參數化，起點不變）。 | 3.887 |
 | [U-Delta-λlr100](docs/variants/u-delta-lambda-lr100.md) | U-Delta 的 `log_rate` 有效學習率 ×100。 | 3.851 |
 | [U-Delta-λlr1000](docs/variants/u-delta-lambda-lr1000.md) | U-Delta 的 `log_rate` 有效學習率 ×1000：幾乎每層都把記憶縮到上限（約 1 個 token）。 | 3.843 |

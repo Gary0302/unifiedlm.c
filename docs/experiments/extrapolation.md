@@ -28,6 +28,7 @@
 | U-Delta-rawFFN | 4.024 | 3.725 | 3.748 | 3.796 | 3.803 | 3.780 | 3.760 |
 | U-Delta-rawFFN+λlr1000 | 4.007 | 3.699 | 3.725 | 3.766 | 3.768 | 3.736 | 3.713 |
 | U-Delta-rawFFN+λlr1000+rawanchor | 3.987 | 3.684 | 3.712 | 3.752 | 3.753 | 3.719 | 3.695 |
+| U-Delta-rawFFN+λlr1000+carry | 4.126 | 3.711 | 3.731 | 3.774 | 3.769 | 3.735 | 3.710 |
 | U-Delta+attn（含 attention） | 4.061 | 3.747 | 3.778 | 3.814 | 3.819 | 3.785 | 3.762 |
 
 ### 42M 讀到 20K
@@ -58,6 +59,7 @@
 - **Transformer 只有推理時開滑動窗口才不崩**；log-n 縮放和 SSMax 都救不了（SSMax 過了 1,024 照樣崩）。
 - **15M 統一 block 贏滑動窗口的 Transformer**：U-Delta-rawFFN+λlr1000 3.713，滑動窗口的 Transformer 三個 seed 3.874–3.903。
 - **42M 的 U-Delta-rawFFN+λlr1000 追平滑動窗口的 Transformer**：16K–20K 3.142 對 3.142，1K 之後每段相差不到 0.006；1,024 以內有輸有贏（開頭 64 個 token 贏 0.021，64–256 輸 0.017–0.019）。U-Delta-rawFFN 還輸 0.01–0.03（3.166）。比 U-Delta-rawFFN 好的幅度在 2K 之後越讀越大（2K–4K 0.010，16K–20K 0.024），跟 15M 一樣。1 個 seed。
+- **訓練時讓記憶跨窗口接續沒有幫助**：U-Delta-rawFFN+λlr1000+carry 每個訓練窗口從同一串上一個窗口結束的記憶開始（梯度不跨窗口），讀到 20K 只在 4K 之後跟 U-Delta-rawFFN+λlr1000 打平（16K–20K 3.710 對 3.713），開頭 64 個 token 反而差 0.119（評測時每個窗口從空記憶開始，訓練時不是）。1 個 seed。
 - **記憶縮短的版本越讀越好，保留慢記憶的越讀越差**：λlr1000 和 rawFFN+λlr1000 在 8K 之後繼續下降；U-Delta+slow、U-Delta-diverseλ 在 4K 之後比 U-Delta 差。
 - **直接用長窗口訓練反而變差**：同樣的 token 數，Transformer 用 4K、16K 訓練，在 512–1,024 段比用 1,024 訓練還差；U-Gate 用 4K 訓練差約 0.03，U-Gate-fastinit 差不多（512–1,024 段好 0.007）。
 
@@ -67,4 +69,4 @@
 
 ## 涉及的變體
 
-[Transformer](../variants/transformer.md)、[Transformer+SSMax](../variants/transformer-ssmax.md)、[GDN](../variants/gdn.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN+λlr1000+rawanchor](../variants/u-delta-rawffn-lambda-lr1000-rawanchor.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)
+[Transformer](../variants/transformer.md)、[Transformer+SSMax](../variants/transformer-ssmax.md)、[GDN](../variants/gdn.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN+λlr1000+rawanchor](../variants/u-delta-rawffn-lambda-lr1000-rawanchor.md)、[U-Delta-rawFFN+λlr1000+carry](../variants/u-delta-rawffn-lambda-lr1000-carry.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)

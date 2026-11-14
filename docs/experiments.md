@@ -49,6 +49,7 @@
 
 | 變體 | 代號 | 是什麼 | 15M 驗證 NLL |
 | --- | --- | --- | ---: |
+| [U-Delta-rawFFN+λlr1000+carry](variants/u-delta-rawffn-lambda-lr1000-carry.md) | `SDulc` | U-Delta-rawFFN+λlr1000 訓練時記憶跨窗口接續：每個窗口從同一串上一個窗口結束的記憶開始（梯度不跨窗口），評測照舊從空記憶開始。 | 3.815 |
 | [U-Delta-λlr10](variants/u-delta-lambda-lr10.md) | `SDl` | U-Delta 的每格基礎遺忘率 `log_rate` 有效學習率 ×10（重參數化，起點不變）。 | 3.887 |
 | [U-Delta-λlr100](variants/u-delta-lambda-lr100.md) | `SDl100` | U-Delta 的 `log_rate` 有效學習率 ×100。 | 3.851 |
 | [U-Delta-λlr1000](variants/u-delta-lambda-lr1000.md) | `SDl1000` | U-Delta 的 `log_rate` 有效學習率 ×1000：幾乎每層都把記憶縮到上限（約 1 個 token）。 | 3.843 |
@@ -110,6 +111,7 @@
 | **統一 block（主線）** | | | | | |
 | U-Delta-rawFFN+λlr1000+rawanchor | `SDula` | 15.45M | 1 | 3.778 | 3.736 |
 | U-Delta-rawFFN+λlr1000 | `SDul` | 15.45M | 3 | 3.796（3.793–3.799） | 3.753 |
+| U-Delta-rawFFN+λlr1000+carry | `SDulc` | 15.45M | 1 | 3.815 | 3.759 |
 | U-Delta-rawFFN | `SDu` | 15.45M | 1 | 3.812 | 3.774 |
 | U-Delta-λlr1000 | `SDl1000` | 15.45M | 1 | 3.843 | 3.796 |
 | U-Delta-λlr100 | `SDl100` | 15.45M | 1 | 3.851 | 3.809 |
@@ -198,6 +200,7 @@
 | U-Delta-rawFFN | 4.024 | 3.725 | 3.748 | 3.796 | 3.803 | 3.780 | 3.760 |
 | U-Delta-rawFFN+λlr1000 | 4.007 | 3.699 | 3.725 | 3.766 | 3.768 | 3.736 | 3.713 |
 | U-Delta-rawFFN+λlr1000+rawanchor | 3.987 | 3.684 | 3.712 | 3.752 | 3.753 | 3.719 | 3.695 |
+| U-Delta-rawFFN+λlr1000+carry | 4.126 | 3.711 | 3.731 | 3.774 | 3.769 | 3.735 | 3.710 |
 | U-Delta+attn | 4.061 | 3.747 | 3.778 | 3.814 | 3.819 | 3.785 | 3.762 |
 
 | 模型（42M） | 0-64 | 512-1024 | 1024-2048 | 2048-4096 | 4096-8192 | 8192-16384 | 16384-20480 |
@@ -221,7 +224,7 @@
 
 ## 進行中與待決定
 
-- **進行中**：`SDulc`（U-Delta-rawFFN+λlr1000，訓練時記憶跨窗口接續，15M，`scripts/nrp/fwsdfk.txt`）。
+- **進行中**：無。
 - **待決定**：U-Delta-rawFFN+λlr1000+rawanchor 補 2 個 seed、跑 42M；42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
 
 ## 資料與程式碼
