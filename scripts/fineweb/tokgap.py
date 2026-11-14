@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "babylm"))
 sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "fineweb"))
 import eval_babylm as ev   # noqa: E402
 import variants            # noqa: E402
+import delta               # noqa: E402,F401  gated.py subclasses model.UnifiedBlock on import: bind it before T replaces it
 
 POS = [(0, 64), (64, 256), (256, 1024)]
 
