@@ -35,6 +35,7 @@ FineWeb-Edu 驗證集，NLL 越低越好；括號裡是 seed 範圍。設定見 
 - [記憶任務 m2kv](../experiments/memory-tasks.md)
 - [U-Delta 為什麼贏 GDN](../experiments/vs-gdn.md)
 - [多 seed 的穩定性](../experiments/seeds.md)
+- [逐 token 差距：輸在哪些 token](../experiments/token-gap.md)
 
 ## 重現
 

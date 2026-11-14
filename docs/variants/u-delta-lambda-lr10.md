@@ -12,7 +12,7 @@ U-Delta 的每格基礎遺忘率 `log_rate` 有效學習率 ×10（重參數化�
 - 初始值跟 U-Delta 一樣：全部 slot 從記 4,096 個 token 開始。初始輸出跟 U-Delta 完全相同。
 - 參數、狀態跟 U-Delta 一樣。
 
-**問題**：U-Delta-spreadλ 追平 U-Delta+slow，但它的基礎遺忘率在 2,300 步內幾乎沒動，等於靠初始值。U-Delta 的 λ 本來就能學，是學不出慢 slot，還是隻是學得太慢？
+**問題**：U-Delta-spreadλ 追平 U-Delta+slow，但它的基礎遺忘率在 2,300 步內幾乎沒動，等於靠初始值。U-Delta 的 λ 本來就能學，是學不出慢 slot，還是只是學得太慢？
 
 ```text
 λ = exp(−exp(10·θ) · g(u))，θ 初始 = log(1/(4L))／10

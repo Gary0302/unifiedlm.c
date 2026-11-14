@@ -41,6 +41,7 @@ U-Delta-λlr100：一路往短衝，而且變好很多。NLL 3.851（長度 1,02
 
 - [記憶設計：快記憶、慢記憶、遺忘率](../experiments/memory-design.md)
 - [長上下文與外推（讀到 20K）](../experiments/extrapolation.md)
+- [拿掉記憶：模型多依賴記憶](../experiments/memory-ablation.md)
 
 ## 重現
 
