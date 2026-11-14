@@ -71,6 +71,7 @@ def main():
         """Per-layer (write, |u|, beta) (B, T) and the loss (B, T) on token t (the logits at t - 1; position 0 is nan)."""
         rec.clear()
         delta.delta_memory = hook
+        x, y = x.contiguous(), y.contiguous()
         logits = net(x, y)
         delta.delta_memory = f
         nll = F.cross_entropy(logits.transpose(1, 2), y, reduction="none")
