@@ -276,6 +276,22 @@ class AnchorRawFFNDeltaBlock(RawFFNFastRate1000DeltaBlock):
         return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
 
 
+
+class NoMemoryDeltaBlock(RawFFNDeltaBlock):
+    """SDn: SDu with the memory removed, the control for what the memory buys: y = x + mu z, z = relu(K u + b)^2 on
+    the conv output. The memory's parameters (val, beta, the gate, log_rate, log_eps) are dropped."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        del self.val, self.beta, self.gate_q, self.gate_p, self.log_rate, self.log_eps
+
+    def forward(self, x):
+        h = self.norm(x)
+        u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            z = F.relu(_hi(self.key(u))).square()
+        return x + self.dropout(self.mu(z.type_as(x)))
+
 CARRY = {"calls": 0, "accum": 1}   # SDulc: training forwards so far, micro-batches per optimizer step
 
 

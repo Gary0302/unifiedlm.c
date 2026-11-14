@@ -343,6 +343,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDul":  # SDu with SDl1000's 1000x learning rate on log_rate
         import delta
         model.UnifiedBlock = delta.RawFFNFastRate1000DeltaBlock
+    elif variant == "SDn":  # control: SDu with the memory removed (FFN on the conv output only)
+        import delta
+        model.UnifiedBlock = delta.NoMemoryDeltaBlock
     elif variant == "SDula":  # SDul with the write target anchored at the FFN output it gives, v - mu z_{t-1}
         import delta
         model.UnifiedBlock = delta.AnchorRawFFNDeltaBlock
