@@ -42,7 +42,8 @@
 | [U-Avg](variants/u-avg.md) | `S` | 原版 UnifiedLM，也就是本倉庫 `model.py` 的標準模型：同一組格子既當 FFN 又當上下文記憶，格子裡存“先驗 + 上下文證據”的後驗均值。 | 4.112（3 個 seed，4.107–4.116） |
 | [U-Delta](variants/u-delta.md) | `SD` | 把格子裡的“後驗均值”換成以 FFN 為錨的 delta rule 記憶：記憶只存 FFN 沒預測到的部分，同一個位址的新值按比例覆蓋舊值。 | 3.898（3 個 seed，3.895–3.901） |
 | [U-Delta-rawFFN](variants/u-delta-rawffn.md) | `SDu` | U-Delta 的 FFN 那一半改讀未歸一化的 relu²（就是標準的 ReLU² FFN），記憶那一半不變。 | 3.812 |
-| [U-Delta-rawFFN+λlr1000](variants/u-delta-rawffn-lambda-lr1000.md) | `SDul` | 目前最新、最好的統一 block。 U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。 | 3.796（3 個 seed，3.793–3.799） |
+| [U-Delta-rawFFN+λlr1000](variants/u-delta-rawffn-lambda-lr1000.md) | `SDul` | 3 個 seed、有 42M 的統一 block 裡最好的。 U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。 | 3.796（3 個 seed，3.793–3.799） |
+| [U-Delta-rawFFN+λlr1000+rawanchor](variants/u-delta-rawffn-lambda-lr1000-rawanchor.md) | `SDula` | 15M 目前最好（1 個 seed）。 U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。 | 3.778 |
 
 ### 記憶設計
 
@@ -106,6 +107,7 @@
 | 模型 | 代號 | 參數量 | seed 數 | 驗證 NLL @1024（範圍） | @4096 |
 | --- | --- | ---: | ---: | ---: | ---: |
 | **統一 block（主線）** | | | | | |
+| U-Delta-rawFFN+λlr1000+rawanchor | `SDula` | 15.45M | 1 | 3.778 | 3.736 |
 | U-Delta-rawFFN+λlr1000 | `SDul` | 15.45M | 3 | 3.796（3.793–3.799） | 3.753 |
 | U-Delta-rawFFN | `SDu` | 15.45M | 1 | 3.812 | 3.774 |
 | U-Delta-λlr1000 | `SDl1000` | 15.45M | 1 | 3.843 | 3.796 |
@@ -193,6 +195,7 @@
 | U-Delta-λlr1000 | 4.085 | 3.753 | 3.776 | 3.814 | 3.813 | 3.776 | 3.752 |
 | U-Delta-rawFFN | 4.024 | 3.725 | 3.748 | 3.796 | 3.803 | 3.780 | 3.760 |
 | U-Delta-rawFFN+λlr1000 | 4.007 | 3.699 | 3.725 | 3.766 | 3.768 | 3.736 | 3.713 |
+| U-Delta-rawFFN+λlr1000+rawanchor | 3.987 | 3.684 | 3.712 | 3.752 | 3.753 | 3.719 | 3.695 |
 | U-Delta+attn | 4.061 | 3.747 | 3.778 | 3.814 | 3.819 | 3.785 | 3.762 |
 
 | 模型（42M） | 0-64 | 512-1024 | 1024-2048 | 2048-4096 | 4096-8192 | 8192-16384 | 16384-20480 |
@@ -216,8 +219,8 @@
 
 ## 進行中與待決定
 
-- **進行中**：三個 15M 變體（`scripts/nrp/fwsdfk.txt`）：`SDula`（U-Delta-rawFFN+λlr1000，寫入目標錨在 FFN 實際給出的 μz）、`SDulc`（訓練時記憶跨窗口接續）、`SDn`（U-Delta-rawFFN 拿掉記憶，沒有記憶的對照）。
-- **待決定**：42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
+- **進行中**：兩個 15M 變體（`scripts/nrp/fwsdfk.txt`）：`SDulc`（U-Delta-rawFFN+λlr1000，訓練時記憶跨窗口接續）、`SDn`（U-Delta-rawFFN 拿掉記憶，沒有記憶的對照）。
+- **待決定**：U-Delta-rawFFN+λlr1000+rawanchor 補 2 個 seed、跑 42M；42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
 
 ## 資料與程式碼
 

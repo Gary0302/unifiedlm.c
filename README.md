@@ -13,12 +13,12 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | 模型 | 是什麼 | 15M | 42M | 讀到 20K（15M，16K–20K 段） |
 | --- | --- | ---: | ---: | ---: |
 | [Transformer](docs/variants/transformer.md) | llama2.c 式基線 | 3.945（3 個 seed） | **3.214** | 6.049（完整上下文）/ 3.893（滑動窗口 1,024） |
-| **[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)** | 最新、最好的統一 block | **3.796**（3 個 seed） | 3.223 | **3.713** |
+| **[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)** | 3 個 seed、有 42M 的統一 block 裡最好的 | **3.796**（3 個 seed） | 3.223 | **3.713** |
 | [U-Avg](docs/variants/u-avg.md) | 原版統一 block（`model.py`） | 4.112（3 個 seed） | 3.423 | — |
 
 驗證 NLL，長度 1,024，越低越好。15M 和 42M 的參數量與 Transformer 對齊到 ±2%。
 
-從原版到現在（15M）：[U-Avg](docs/variants/u-avg.md) 4.112 → 記憶改用 delta rule（[U-Delta](docs/variants/u-delta.md)）3.898 → FFN 那一半讀未歸一化的位址（[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)）3.812 → 遺忘率學快 1,000 倍（[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)）3.796。
+從原版到現在（15M）：[U-Avg](docs/variants/u-avg.md) 4.112 → 記憶改用 delta rule（[U-Delta](docs/variants/u-delta.md)）3.898 → FFN 那一半讀未歸一化的位址（[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)）3.812 → 遺忘率學快 1,000 倍（[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)）3.796 → 寫入目標改錨在 FFN 實際的輸出 μz（[U-Delta-rawFFN+λlr1000+rawanchor](docs/variants/u-delta-rawffn-lambda-lr1000-rawanchor.md)）3.778（1 個 seed，還沒補 seed 和 42M）。
 
 ### 主張
 
@@ -51,6 +51,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | [U-Delta](docs/variants/u-delta.md) | 把格子裡的“後驗均值”換成以 FFN 為錨的 delta rule 記憶：記憶只存 FFN 沒預測到的部分，同一個位址的新值按比例覆蓋舊值。 | 3.898（3 個 seed，3.895–3.901） |
 | [U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) | U-Delta 的 FFN 那一半改讀未歸一化的 relu²（就是標準的 ReLU² FFN），記憶那一半不變。 | 3.812 |
 | [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) | U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。 | 3.796（3 個 seed，3.793–3.799） |
+| [U-Delta-rawFFN+λlr1000+rawanchor](docs/variants/u-delta-rawffn-lambda-lr1000-rawanchor.md) | U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。 | 3.778 |
 
 **記憶設計**
 

@@ -8,7 +8,7 @@ Transformer 在 attention 前加上跟 U-Delta 一樣的寬 4 因果卷積：看
 
 ## 怎麼做的
 
-- 每個注意力半層：範式後先過一個寬 4 的因果 depthwise 卷積，再算 q、k、v。
+- 每個注意力半層：歸一化後先過一個寬 4 的因果 depthwise 卷積，再算 q、k、v。
 - 卷積初始化成恆等（一開始等於沒有卷積），沒有激活函數，跟 U-Delta 的卷積完全相同。
 - 其他（RoPE、FFN、寬度）都跟 Transformer 一樣，參數只多 6.9K。
 

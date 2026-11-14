@@ -1,6 +1,6 @@
 # U-Delta-rawFFN+λlr1000（代號 `SDul`）
 
-**目前最新、最好的統一 block。** U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。
+**3 個 seed、有 42M 的統一 block 裡最好的。** U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。
 
 - **類別**：主線（統一 block，不含 attention）
 - **基於**：[U-Delta-rawFFN](u-delta-rawffn.md)
