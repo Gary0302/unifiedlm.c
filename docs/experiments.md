@@ -24,7 +24,7 @@
 | [記憶的寫法：平均、遺忘門、delta rule](experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |
 | [FFN 那一半讀哪個位址](experiments/ffn-address.md) | U-Delta 到 42M 為什麼輸 Transformer？ | FFN 讀歸一化位址是瓶頸；改讀 relu² 後 15M 好 0.086、42M 好 0.122。 |
 | [記憶設計：快記憶、慢記憶、遺忘率](experiments/memory-design.md) | 需要慢記憶嗎？遺忘率怎麼設？ | 不需要慢記憶；記憶越短越好，短到上限還在變好。 |
-| [拿掉記憶：模型多依賴記憶](experiments/memory-ablation.md) | 推理時關掉記憶會怎樣？哪一層最重要？ | NLL 升 1.5–2.0，而且按位置變平：讀前文全靠記憶。 |
+| [拿掉記憶：記憶值多少、模型多依賴記憶](experiments/memory-ablation.md) | 沒有記憶會差多少？推理時關掉記憶會怎樣？哪一層最重要？ | 記憶真正值 0.58（沒有記憶、從頭訓練的版本 4.388）；推理時關掉記憶 NLL 升 1.5–2.0，按位置變平：讀前文全靠記憶。 |
 | [內容是被遺忘還是被覆寫](experiments/forgetting-vs-overwrite.md) | 格子丟掉內容，是衰減還是被新寫入覆蓋？ | 典型格子是衰減（覆寫不到 1%）；少數常被寫的格子覆寫較重。 |
 | [寫入量與 loss](experiments/write-vs-loss.md) | 記憶是不是只寫沒預測到的 token？ | 只是偏向，相關 0.14–0.21；自己預測到的也照寫。 |
 | [位址尖銳度](experiments/sharpness.md) | 位址更尖（更大的次方）會不會更好？ | 不會：可學的次方停在 2.0–2.35，NLL 不變。 |
@@ -86,6 +86,7 @@
 
 | 變體 | 代號 | 是什麼 | 15M 驗證 NLL |
 | --- | --- | --- | ---: |
+| [U-Delta-rawFFN-nomem](variants/u-delta-rawffn-nomem.md) | `SDn` | 沒有記憶的對照：U-Delta-rawFFN 把記憶那一半整個拿掉、從頭訓練，只剩 FFN 和位址前的短卷積。 | 4.388 |
 | [Transformer](variants/transformer.md) | `T` | llama2.c 式 Transformer 基線：RoPE attention + SwiGLU FFN，參數量跟統一 block 對齊。 | 3.945（3 個 seed，3.928–3.957） |
 | [GDN](variants/gdn.md) | `GDN` | 線性遞歸（SSM 類）基線：Transformer 的 attention 換成 Gated DeltaNet（6 個 head × 48）。 | 3.964 |
 | [GDN-bigstate](variants/gdn-bigstate.md) | `GDNs` | 我們自己的 GDN 變體：2 個大 head（各 144 維），狀態約 3 倍，衰減用平滑上下限。 | 3.964 |
@@ -135,6 +136,7 @@
 | Mesa | `MESA` | 15.24M | 1 | 3.969 | 3.951 |
 | GDN-2 | `GDN2` | 15.21M | 1 | 3.970 | 3.954 |
 | Split（P） | `P` | 17.64M | 3 | 4.038（4.034–4.040） | 6.233 |
+| U-Delta-rawFFN-nomem | `SDn` | 14.16M | 1 | 4.388 | 4.386 |
 | **含 attention 的對照（不算統一 block）** | | | | | |
 | U-Delta+attn | `SDA` | 15.45M | 1 | 3.840 | 3.798 |
 | Transformer+SSMax | `TS` | 15.19M | 1 | 3.913 | 5.101 |
@@ -219,7 +221,7 @@
 
 ## 進行中與待決定
 
-- **進行中**：兩個 15M 變體（`scripts/nrp/fwsdfk.txt`）：`SDulc`（U-Delta-rawFFN+λlr1000，訓練時記憶跨窗口接續）、`SDn`（U-Delta-rawFFN 拿掉記憶，沒有記憶的對照）。
+- **進行中**：`SDulc`（U-Delta-rawFFN+λlr1000，訓練時記憶跨窗口接續，15M，`scripts/nrp/fwsdfk.txt`）。
 - **待決定**：U-Delta-rawFFN+λlr1000+rawanchor 補 2 個 seed、跑 42M；42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
 
 ## 資料與程式碼

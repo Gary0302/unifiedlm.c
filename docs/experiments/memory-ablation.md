@@ -1,13 +1,13 @@
-# 拿掉記憶：模型多依賴記憶
+# 拿掉記憶：記憶值多少、模型多依賴記憶
 
-**問題**：推理時關掉記憶會怎樣？哪一層最重要？
+**問題**：沒有記憶會差多少？推理時關掉記憶會怎樣？哪一層最重要？
 
-**簡短回答**：NLL 升 1.5–2.0，而且按位置變平：讀前文全靠記憶。
+**簡短回答**：記憶真正值 0.58（沒有記憶、從頭訓練的版本 4.388）；推理時關掉記憶 NLL 升 1.5–2.0，按位置變平：讀前文全靠記憶。
 
 ## 怎麼做的
 
 - 推理時把每一層記憶讀出的 E_tᵀ q_t 設為 0，block 只剩 FFN 那一半；另外每次只關一層（`scripts/fineweb/memablate.py`）。
-- 模型是帶著記憶訓練的，所以這量的是**依賴程度**，不是沒有記憶時能做到多好。後者要訓練一個沒有記憶的版本：U-Delta-rawFFN 拿掉記憶（`SDn`，在 `scripts/nrp/fwsdfk.txt` 排隊）。
+- 模型是帶著記憶訓練的，所以這量的是**依賴程度**，不是沒有記憶時能做到多好。後者用一個沒有記憶、從頭訓練的版本對照：U-Delta-rawFFN 拿掉記憶（[U-Delta-rawFFN-nomem](../variants/u-delta-rawffn-nomem.md)，`SDn`），用正式評測（2,048 個窗口）。
 - 128 個長 1,024 的窗口、32 個長 4,096 的窗口，每個模型同一批（成對比較）。窗口比正式評測少，所以完整模型的 NLL 跟正式數字略有出入。
 
 ## 結果
@@ -22,6 +22,14 @@
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 15M | 3.759 | 5.357 | +1.598 | 5.347 | 5.356 | 5.357 | 第 5 層 +0.50、第 0 層 +0.34 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 42M | 3.212 | 4.969 | +1.757 | 4.978 | 4.960 | 4.969 | 第 6 層 +0.29、第 0 層 +0.22 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 42M | 3.208 | 5.092 | +1.884 | 5.094 | 5.087 | 5.092 | 第 0 層 +0.57、第 7 層 +0.25 |
+
+### 沒有記憶、從頭訓練（正式評測，15M，seed 1337）
+
+| 模型 | 0–64 | 64–128 | 128–256 | 256–512 | 512–1024 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 4.170 | 3.887 | 3.826 | 3.784 | 3.768 |
+| [U-Delta-rawFFN-nomem](../variants/u-delta-rawffn-nomem.md) | 4.421 | 4.372 | 4.373 | 4.394 | 4.387 |
+| U-Delta-rawFFN-nomem − U-Delta-rawFFN | +0.251 | +0.485 | +0.547 | +0.609 | +0.619 |
 
 ### 只關一層（15M，長度 1,024，NLL 增加）
 
@@ -41,6 +49,8 @@
 
 ## 結論
 
+- **記憶真正值 0.576**：沒有記憶、從頭訓練的 U-Delta-rawFFN-nomem 4.388，U-Delta-rawFFN 3.812；比 Transformer（3.945）差 0.443，連 U-Avg（4.112）都不如。價值越後面越大：前 64 個 token 0.251，512–1,024 0.619。沒有記憶的版本每個位置都是 4.37–4.42，前文完全沒有幫助。
+- **推理時關掉記憶高估了記憶的作用**：關掉 U-Delta-rawFFN 的記憶是 5.248，從頭訓練的沒有記憶版本好約 0.86：模型沒學過沒有記憶的情況。下面幾條是依賴程度，不是作用。
 - **全部依賴記憶**：關掉記憶 NLL 升 1.47–1.97（U-Delta 15M 3.857 → 5.737，U-Delta-rawFFN+λlr1000 42M 3.208 → 5.092）。
 - **關掉記憶後按位置是平的**：U-Delta-rawFFN+λlr1000 42M 每段 5.058–5.109，前 64 個 token 跟 512–1,024 一樣，長度 4,096 也一樣。除了每層只看最近 4 個 token 的卷積，模型讀前文全靠記憶。
 - **記憶短的版本更依賴記憶**：U-Delta-rawFFN+λlr1000 大部分層的有效記憶只有 1–2 個 token，關掉記憶卻升 1.60（15M）、1.88（42M），比 U-Delta-rawFFN（1.47、1.76）還多；U-Delta-λlr1000 1.97，比 U-Delta 1.88 多。
@@ -49,9 +59,10 @@
 
 ## 注意
 
-- 量的是依賴，不是作用：模型沒學過沒有記憶的情況，關掉後的輸入分佈跟訓練時不同。沒有記憶的對照（SDn）在跑。
+- 關掉記憶量的是依賴，不是作用：模型沒學過沒有記憶的情況，關掉後的輸入分佈跟訓練時不同。
+- U-Delta-rawFFN-nomem 拿掉了記憶的參數，少 1.3M（14.16M 對 15.45M），沒有對齊。
 - 各 1 個 seed。
 
 ## 涉及的變體
 
-[U-Delta](../variants/u-delta.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)
+[U-Delta](../variants/u-delta.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN-nomem](../variants/u-delta-rawffn-nomem.md)

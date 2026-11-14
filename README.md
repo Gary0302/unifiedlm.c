@@ -31,7 +31,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 ### 主要觀察
 
 - **記憶短一點更好，短到上限還在變好。** 放開遺忘率的學習率，模型把大部分層的記憶縮到約 1 個 token，NLL 反而變好，讀到 20K 也越讀越好；強迫保留慢記憶（U-Delta+slow、U-Delta-diverseλ）讀到 4K 以後變差。見[記憶設計](docs/experiments/memory-design.md)。
-- **讀前文全靠記憶，記憶短的版本更依賴記憶。** 推理時關掉記憶，NLL 升 1.5–2.0，而且按位置變平（除了每層看最近 4 個 token 的卷積，沒有別的路徑讀前文）；U-Delta-rawFFN+λlr1000 大部分層只記 1–2 個 token，卻比 U-Delta-rawFFN 更依賴記憶。見[拿掉記憶](docs/experiments/memory-ablation.md)。
+- **記憶值 0.58，讀前文全靠它。** 把記憶拿掉、從頭訓練的 [U-Delta-rawFFN-nomem](docs/variants/u-delta-rawffn-nomem.md) 是 4.388（U-Delta-rawFFN 3.812），每個位置都一樣，前文完全沒有幫助。推理時關掉記憶 NLL 升 1.5–2.0（高估了作用，模型沒學過沒有記憶的情況）；U-Delta-rawFFN+λlr1000 大部分層只記 1–2 個 token，卻比 U-Delta-rawFFN 更依賴記憶。見[拿掉記憶](docs/experiments/memory-ablation.md)。
 - **單一記憶就夠，不需要第二份慢記憶。** U-Delta+slow 的慢記憶沒學（速率停在初始值）；同容量的兩份快記憶跟一份一樣；單一記憶讓中間層忘快一點就追平它。
 - **內容主要是被遺忘掉的，不是被新寫入覆蓋掉的。** 絕大多數格子覆寫占比不到 1%，遺忘門讓實際遺忘比基礎速率快約 10–35 倍；只有少數常被寫的格子覆寫較重（U-Delta 第 6–9 層按層平均 13–22%）。見[遺忘還是覆寫](docs/experiments/forgetting-vs-overwrite.md)。
 - **記憶偏向寫意外的 token，但很弱。** 寫入量和 token loss 的 Spearman 相關只有 0.14–0.21；模型自己 greedy 生成（幾乎都是預測到的）時寫入量還有真實文字的 0.52–0.74 倍。見[寫入量與 loss](docs/experiments/write-vs-loss.md)。
@@ -94,6 +94,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 | 變體 | 改了什麼 | 15M |
 | --- | --- | ---: |
+| [U-Delta-rawFFN-nomem](docs/variants/u-delta-rawffn-nomem.md) | 沒有記憶的對照：U-Delta-rawFFN 把記憶那一半整個拿掉、從頭訓練，只剩 FFN 和位址前的短卷積。 | 4.388 |
 | [Transformer](docs/variants/transformer.md) | llama2.c 式 Transformer 基線：RoPE attention + SwiGLU FFN，參數量跟統一 block 對齊。 | 3.945（3 個 seed，3.928–3.957） |
 | [GDN](docs/variants/gdn.md) | 線性遞歸（SSM 類）基線：Transformer 的 attention 換成 Gated DeltaNet（6 個 head × 48）。 | 3.964 |
 | [GDN-bigstate](docs/variants/gdn-bigstate.md) | 我們自己的 GDN 變體：2 個大 head（各 144 維），狀態約 3 倍，衰減用平滑上下限。 | 3.964 |
@@ -121,7 +122,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | [記憶的寫法：平均、遺忘門、delta rule](docs/experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |
 | [FFN 那一半讀哪個位址](docs/experiments/ffn-address.md) | U-Delta 到 42M 為什麼輸 Transformer？ | FFN 讀歸一化位址是瓶頸；改讀 relu² 後 15M 好 0.086、42M 好 0.122。 |
 | [記憶設計：快記憶、慢記憶、遺忘率](docs/experiments/memory-design.md) | 需要慢記憶嗎？遺忘率怎麼設？ | 不需要慢記憶；記憶越短越好，短到上限還在變好。 |
-| [拿掉記憶：模型多依賴記憶](docs/experiments/memory-ablation.md) | 推理時關掉記憶會怎樣？哪一層最重要？ | NLL 升 1.5–2.0，而且按位置變平：讀前文全靠記憶。 |
+| [拿掉記憶：記憶值多少、模型多依賴記憶](docs/experiments/memory-ablation.md) | 沒有記憶會差多少？推理時關掉記憶會怎樣？哪一層最重要？ | 記憶真正值 0.58（沒有記憶、從頭訓練的版本 4.388）；推理時關掉記憶 NLL 升 1.5–2.0，按位置變平：讀前文全靠記憶。 |
 | [內容是被遺忘還是被覆寫](docs/experiments/forgetting-vs-overwrite.md) | 格子丟掉內容，是衰減還是被新寫入覆蓋？ | 典型格子是衰減（覆寫不到 1%）；少數常被寫的格子覆寫較重。 |
 | [寫入量與 loss](docs/experiments/write-vs-loss.md) | 記憶是不是只寫沒預測到的 token？ | 只是偏向，相關 0.14–0.21；自己預測到的也照寫。 |
 | [位址尖銳度](docs/experiments/sharpness.md) | 位址更尖（更大的次方）會不會更好？ | 不會：可學的次方停在 2.0–2.35，NLL 不變。 |
