@@ -44,9 +44,9 @@
 2. **42M：差一点追上，还没赢。** Transformer 3.214，U-Delta-rawFFN 3.228（输 0.014），U-Delta 3.350，U-Gate 三个 seed 3.328–3.333。U-Delta 在 42M 落后的主因是 FFN 读了归一化的地址：改成标准 ReLU² FFN 补回 0.122。剩下的差距不在开头（前 64 个 token 还略赢），而在 64–1,024 之间（每段 +0.013～+0.016）。42M 时 Transformer 也学会用前文了（同样两段降 0.129，U-Delta-rawFFN 0.128），15M 那种优势消失。U-Delta-rawFFN+λlr1000 的 42M 在排队。
 3. **110M（只有原版）：U-Avg 2.994，Transformer 2.822。** 原版输很多；U-Delta 系列还没跑 110M。
 4. **记忆的写法：delta rule 远好于平均。** 15M 时 U-Delta 3.898，U-Gate 3.998，U-Avg 4.112（各 3 个 seed）。
-5. **记忆短一点更好。** 放开基础遗忘率的学习率，模型会一路把记忆缩短：λlr100 3.851、λlr1000 3.843，都跟 U-Delta+attn 打平；λlr1000 除了第 1–3 层，每层都忘到上限（每个 token 最多忘 63%，约 1 个 token）。和 rawFFN 合并只叠加了一部分（再好 0.019，不是 0.055）。
+5. **记忆短一点更好。** 放开基础遗忘率的学习率，模型会一路把记忆缩短：λlr100 3.851、λlr1000 3.843，都跟 U-Delta+attn 打平；λlr1000 除了第 1–3 层，每层都忘到上限（每个 token 最多忘 63%，约 1 个 token）。和 rawFFN 合并只叠加了一部分（1,024 内再好 0.019，不是 0.055），但外推的好处留住了：读到 20K 时比 U-Delta-rawFFN 好的幅度从开头的 0.017 增加到 16K–20K 的 0.047。
 6. **强迫留住慢记忆没用，读得很长时还更差。** U-Delta+slow（慢记忆几乎不忘）和 U-Delta-diverseλ（门有上限，慢格子留得住）在 1,024 内只小赢，读到 4K 以后都比 U-Delta 差，16K–20K 是 3.856、3.859，U-Delta 3.810–3.820。
-7. **外推：统一 block 过了训练长度不会崩。** 完整上下文的 Transformer 在 16K–20K 是 6.09（15M）、6.25（42M）。跟滑动窗口的 Transformer 比：15M 统一 block 赢（滑动窗口 Transformer 3.874，U-Delta 三个 seed 3.810–3.820，U-Delta-λlr1000 3.752），42M U-Delta-rawFFN 输 0.01～0.03（16K–20K 3.166 对 3.142）。
+7. **外推：统一 block 过了训练长度不会崩。** 完整上下文的 Transformer 在 16K–20K 是 6.09（15M）、6.25（42M）。跟滑动窗口的 Transformer 比：15M 统一 block 赢（滑动窗口 Transformer 3.874，U-Delta 三个 seed 3.810–3.820，U-Delta-rawFFN+λlr1000 3.713），42M U-Delta-rawFFN 输 0.01～0.03（16K–20K 3.166 对 3.142）。
 8. **纯记忆题 m2kv（宽度 32）：只有 U-Delta 外推。** 训练时间隔最多 256；间隔 4,096 时 U-Delta 100%，U-Gate 39.6%，Transformer 和 U-Avg 0%。不重训再拉长：U-Delta 8,192 95.4%、16,384 55.1%、20,000 33.9%；U-Delta+slow 16,384 77.0%、20,000 66.9%，慢记忆在真的需要记很久时有用。
 9. **U-Delta 赢 GDN 不是因为卷积、写入规则或状态大小。** Transformer+conv 只比 Transformer 好 0.007；GDN-2、Mesa 和 GDN 同一档；GDN 状态放大 3 倍没变。统一 block 原本的弱点是开头 64 个 token（比 GDN 差约 0.09），来自 FFN，U-Delta-rawFFN 补平了（4.170 对 4.166）。
 
@@ -141,6 +141,7 @@
 | U-Delta-λlr100 | 4.081 | 3.763 | 3.786 | 3.830 | 3.828 | 3.793 | 3.769 |
 | U-Delta-λlr1000 | 4.085 | 3.753 | 3.776 | 3.814 | 3.813 | 3.776 | 3.752 |
 | U-Delta-rawFFN | 4.024 | 3.725 | 3.748 | 3.796 | 3.803 | 3.780 | 3.760 |
+| U-Delta-rawFFN+λlr1000 | 4.007 | 3.699 | 3.725 | 3.766 | 3.768 | 3.736 | 3.713 |
 | U-Delta+attn | 4.061 | 3.747 | 3.778 | 3.814 | 3.819 | 3.785 | 3.762 |
 
 | 模型（42M） | 0-64 | 512-1024 | 1024-2048 | 2048-4096 | 4096-8192 | 8192-16384 | 16384-20480 |
@@ -163,7 +164,7 @@
 
 ## 进行中与待决定
 
-- **进行中**：U-Delta-rawFFN+λlr1000 42M（约 9.5 小时）；它的 15M 读到 20K。
+- **进行中**：U-Delta-rawFFN+λlr1000 42M（约 9.5 小时）。
 - **待决定**：记忆完全拿掉的对照（U-Delta-λlr1000 几乎把记忆关掉，记忆还剩多少作用）；42M 的学习率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 补 seed；Transformer 加 NoPE 层作完整上下文的外推对照；U-Delta 的两个归因实验（写入目标去掉 −μk 锚、μ 和记忆用各自的地址）；Transformer 学习率 1e-3；Transformer 和 U-Delta 各跑 2 倍步数。
 
 ## 数据与代码
@@ -191,7 +192,7 @@ y = μ z + E_tᵀ q_t，z = relu(K u + b)²
 log λ = expm1(−exp(1000 θ) · g)
 ```
 
-**结论**：15M：NLL 3.793（长度 1,024）、3.750（4,096），比 U-Delta-rawFFN（3.812）再好 0.019，是目前 15M 最好的统一 block，也赢 U-Delta+attn（3.840）0.047、Transformer（3 个 seed 平均 3.945）0.152（1 个 seed）。但只叠加了一部分：U-Delta-λlr1000 单独比 U-Delta 好 0.055，加在 U-Delta-rawFFN 上只再好 0.019。每个位置都比 U-Delta-rawFFN 好 0.017–0.020（前 64 个 token 4.153 对 4.170，512–1,024 3.748 对 3.768）。记忆几乎被关掉：有效记忆长度 12 层里有 10 层只有 1.1–2.2 个 token，只剩第 2、3 层记 38、22 个 token（U-Delta-rawFFN 是 5–509）。比 U-Delta-rawFFN 好 0.01 以上，照规则接着跑 42M；读到 20K 在跑。
+**结论**：15M：NLL 3.793（长度 1,024）、3.750（4,096），比 U-Delta-rawFFN（3.812）再好 0.019，是目前 15M 最好的统一 block，也赢 U-Delta+attn（3.840）0.047、Transformer（3 个 seed 平均 3.945）0.152（1 个 seed）。但只叠加了一部分：U-Delta-λlr1000 单独比 U-Delta 好 0.055，加在 U-Delta-rawFFN 上只再好 0.019。每个位置都比 U-Delta-rawFFN 好 0.017–0.020（前 64 个 token 4.153 对 4.170，512–1,024 3.748 对 3.768）。记忆几乎被关掉：有效记忆长度 12 层里有 10 层只有 1.1–2.2 个 token，只剩第 2、3 层记 38、22 个 token（U-Delta-rawFFN 是 5–509）。比 U-Delta-rawFFN 好 0.01 以上，照规则接着跑 42M（18:08 开始）；读到 20K：每一段都是 15M 最好的，16K–20K 3.713（U-Delta-λlr1000 3.752、U-Delta-rawFFN 3.760、U-Delta+attn 3.762、U-Delta 3.817、滑动窗口的 Transformer 3.874）。比 U-Delta-rawFFN 好的幅度越读越大：前 64 个 token 0.017、512–1,024 0.026、16K–20K 0.047，U-Delta-λlr1000 那一半带来的外推好处留住了。
 
 ### U-Delta-rawFFN：FFN 那一半读没范式的地址
 

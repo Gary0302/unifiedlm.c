@@ -11,7 +11,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | 验证 NLL @1024 | 15M | 42M |
 | --- | ---: | ---: |
 | Transformer（llama2.c 式） | 3.945（3 个 seed） | **3.214** |
-| U-Delta-rawFFN+λlr1000 | **3.793** | 排队中 |
+| U-Delta-rawFFN+λlr1000 | **3.793** | 训练中 |
 | U-Delta-rawFFN | 3.812 | 3.228 |
 | U-Delta+attn（对照，含 attention） | 3.840 | — |
 | U-Delta | 3.898（3 个 seed） | 3.350 |
@@ -23,7 +23,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 - **42M 差一点追上**：U-Delta-rawFFN 只输 0.014。U-Delta 在 42M 输 0.136，主因是 FFN 读归一化地址；剩下的差距在 64–1,024 之间，不在开头。
 - **delta rule 远好于后验均值**：15M 时 U-Delta 3.898，U-Avg 4.112。
 - **记忆短一点更好**：放开遗忘率的学习率，模型把大部分层的记忆缩到约 1 个 token，NLL 反而变好；强迫保留慢记忆（U-Delta+slow、U-Delta-diverseλ）读到 4K 以后变差。
-- **过了训练长度不会崩**：读到 20K 时完整上下文的 Transformer 升到 6.1–6.3，统一 block 维持在 3.1–3.9；但 42M 时仍比滑动窗口 1,024 的 Transformer 差 0.01–0.03。
+- **过了训练长度不会崩**：读到 20K 时完整上下文的 Transformer 升到 6.1–6.3，统一 block 维持在 3.1–3.9（15M 最好的 U-Delta-rawFFN+λlr1000 在 16K–20K 是 3.713，滑动窗口的 Transformer 3.874）；但 42M 时仍比滑动窗口 1,024 的 Transformer 差 0.01–0.03。
 - **重要观察**：U-Delta 系列里，几乎所有格子的内容丢失都来自遗忘门，被新写入覆盖的不到 1%；记忆偏向写意外的 token，但预测到的、模型自己生成的 token 也照写（写入量和 token loss 的 Spearman 相关只有 0.14–0.21）。
 
 实验代码在 `scripts/`（变体注册表 `scripts/variants.py`，U-Delta 系列在 `scripts/delta.py`），结果数据在 `scripts/reports/fineweb/`。依照 `AGENTS.md`，变体在赢之前不进 `model.py`，所以 `model.py` 仍然是 U-Avg。
