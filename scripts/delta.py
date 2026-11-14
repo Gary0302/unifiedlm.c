@@ -288,8 +288,9 @@ class NoMemoryDeltaBlock(RawFFNDeltaBlock):
     def forward(self, x):
         h = self.norm(x)
         u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        s = self.key(u)
         with torch.autocast(device_type=x.device.type, enabled=False):
-            z = F.relu(_hi(self.key(u))).square()
+            z = F.relu(_hi(s)).square()
         return x + self.dropout(self.mu(z.type_as(x)))
 
 CARRY = {"calls": 0, "accum": 1}   # SDulc: training forwards so far, micro-batches per optimizer step
