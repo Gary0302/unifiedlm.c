@@ -20,7 +20,8 @@ for d in sorted(glob.glob(f"{ROOT}/fw*/*/")):
             r[f] = json.load(open(p))
     log = os.path.join(d, "train.log")
     if os.path.exists(log):
-        r["curve"] = [[int(m[1]), float(m[2])] for m in re.finditer(r"step (\d+): train loss [\d.]+, val loss ([\d.]+)", open(log).read())]
+        r["curve"] = [[k, v] for k, v in sorted({int(m[1]): float(m[2]) for m in re.finditer(  # a resumed run repeats its first eval
+                r"step (\d+): train loss [\d.]+, val loss ([\d.]+)", open(log).read())}.items())]
     out["runs"][name] = r
 for p in sorted(glob.glob(f"{ROOT}/bench/*.jsonl")):
     out["bench"][os.path.basename(p)] = [json.loads(l) for l in open(p) if l.startswith("{")]

@@ -1,6 +1,6 @@
 # 统一性实验报告（FineWeb-Edu，15M / 42M）
 
-截至 2026-11-13。除非表里写了 seed 数，每个数字都是单次运行（1 个 seed）；所有模型用同一个学习率，没有调参。主线问题见 [`research_goal.md`](research_goal.md)：同一个原语能不能同时承担 token mixing 和 channel mixing，并达到同规模 Transformer 的语言建模质量。目标是**不含 attention 的统一 block**；含 attention 的版本只作对照。
+截至 2026-11-14。除非表里写了 seed 数，每个数字都是单次运行（1 个 seed）；所有模型用同一个学习率，没有调参。主线问题见 [`research_goal.md`](research_goal.md)：同一个原语能不能同时承担 token mixing 和 channel mixing，并达到同规模 Transformer 的语言建模质量。目标是**不含 attention 的统一 block**；含 attention 的版本只作对照。
 
 ## 命名
 
@@ -40,8 +40,8 @@
 
 ## 主要结论
 
-1. **15M：统一 block 赢 Transformer。** U-Delta 三个 seed 3.895–3.901，Transformer 三个 seed 3.928–3.957。最好的是 U-Delta-rawFFN+λlr1000，3.793，连含 attention 的 U-Delta+attn（3.840）都赢（1 个 seed）。要打折扣的地方：15M 的 Transformer 不太会用前文，第 64–128 段到第 512–1,024 段 NLL 只降 0.06（3.979 → 3.918），U-Delta-rawFFN 降 0.12，所以 15M 的领先有一部分来自小 Transformer 的弱点。
-2. **42M：差一点追上，还没赢。** Transformer 3.214，U-Delta-rawFFN 3.228（输 0.014），U-Delta 3.350，U-Gate 三个 seed 3.328–3.333。U-Delta 在 42M 落后的主因是 FFN 读了归一化的地址：改成标准 ReLU² FFN 补回 0.122。剩下的差距不在开头（前 64 个 token 还略赢），而在 64–1,024 之间（每段 +0.013～+0.016）。42M 时 Transformer 也学会用前文了（同样两段降 0.129，U-Delta-rawFFN 0.128），15M 那种优势消失。U-Delta-rawFFN+λlr1000 的 42M 在排队。
+1. **15M：统一 block 赢 Transformer。** U-Delta 三个 seed 3.895–3.901，Transformer 三个 seed 3.928–3.957。最好的是 U-Delta-rawFFN+λlr1000，三个 seed 3.793、3.795、3.799（平均 3.796），最差的 seed 也比 Transformer 最好的 seed 好 0.128，同 seed 配对每组差 0.134–0.161，连含 attention 的 U-Delta+attn（3.840，1 个 seed）都赢。要打折扣的地方：15M 的 Transformer 不太会用前文，第 64–128 段到第 512–1,024 段 NLL 只降 0.06（3.979 → 3.918），U-Delta-rawFFN 降 0.12，所以 15M 的领先有一部分来自小 Transformer 的弱点。
+2. **42M：差一点追上，还没赢。** Transformer 3.214，U-Delta-rawFFN 3.228（输 0.014），U-Delta 3.350，U-Gate 三个 seed 3.328–3.333。U-Delta 在 42M 落后的主因是 FFN 读了归一化的地址：改成标准 ReLU² FFN 补回 0.122。剩下的差距不在开头（前 64 个 token 还略赢），而在 64–1,024 之间（每段 +0.013～+0.016）。42M 时 Transformer 也学会用前文了（同样两段降 0.129，U-Delta-rawFFN 0.128），15M 那种优势消失。U-Delta-rawFFN+λlr1000 的 42M 在训练中。
 3. **110M（只有原版）：U-Avg 2.994，Transformer 2.822。** 原版输很多；U-Delta 系列还没跑 110M。
 4. **记忆的写法：delta rule 远好于平均。** 15M 时 U-Delta 3.898，U-Gate 3.998，U-Avg 4.112（各 3 个 seed）。
 5. **记忆短一点更好。** 放开基础遗忘率的学习率，模型会一路把记忆缩短：λlr100 3.851、λlr1000 3.843，都跟 U-Delta+attn 打平；λlr1000 除了第 1–3 层，每层都忘到上限（每个 token 最多忘 63%，约 1 个 token）。和 rawFFN 合并只叠加了一部分（1,024 内再好 0.019，不是 0.055），但外推的好处留住了：读到 20K 时比 U-Delta-rawFFN 好的幅度从开头的 0.017 增加到 16K–20K 的 0.047。
@@ -66,7 +66,7 @@
 | 模型 | 代号 | 参数量 | seed 数 | 验证 NLL @1024（范围） | @4096 |
 | --- | --- | ---: | ---: | ---: | ---: |
 | **统一 block（主线）** | | | | | |
-| U-Delta-rawFFN+λlr1000 | `SDul` | 15.45M | 1 | 3.793 | 3.750 |
+| U-Delta-rawFFN+λlr1000 | `SDul` | 15.45M | 3 | 3.796（3.793–3.799） | 3.753 |
 | U-Delta-rawFFN | `SDu` | 15.45M | 1 | 3.812 | 3.774 |
 | U-Delta-λlr1000 | `SDl1000` | 15.45M | 1 | 3.843 | 3.796 |
 | U-Delta-λlr100 | `SDl100` | 15.45M | 1 | 3.851 | 3.809 |
@@ -97,6 +97,15 @@
 | U-Delta+attn | `SDA` | 15.45M | 1 | 3.840 | 3.798 |
 | Transformer+SSMax | `TS` | 15.19M | 1 | 3.913 | 5.101 |
 | Transformer+conv | `TC` | 15.20M | 1 | 3.921 | 4.910 |
+
+按位置（长度 1,024，各 3 个 seed 平均）：
+
+| 位置（3 个 seed 平均） | 0-64 | 64-128 | 128-256 | 256-512 | 512-1024 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Transformer | 4.237 | 3.979 | 3.937 | 3.923 | 3.918 |
+| U-Delta-rawFFN+λlr1000 | 4.154 | 3.872 | 3.812 | 3.770 | 3.751 |
+| U-Delta | 4.261 | 3.978 | 3.914 | 3.870 | 3.852 |
+| U-Delta-rawFFN+λlr1000 − Transformer | -0.083 | -0.107 | -0.125 | -0.154 | -0.167 |
 
 ### 42M
 
@@ -164,7 +173,7 @@
 
 ## 进行中与待决定
 
-- **进行中**：U-Delta-rawFFN+λlr1000 42M（约 9.5 小时，第 1,000 步验证 loss 4.137，同一步 U-Delta-rawFFN 4.137、Transformer 4.155）；U-Delta-rawFFN+λlr1000 15M 补 seed 1338、1339。
+- **进行中**：U-Delta-rawFFN+λlr1000 42M（约 9.5 小时；第一次在第 2,424 步被节点重启打断，2026-11-13 22:00 太平洋时间从头重跑，预计 2026-11-14 06:20 跑完）。
 - **待决定**：记忆完全拿掉的对照（U-Delta-λlr1000 几乎把记忆关掉，记忆还剩多少作用）；42M 的学习率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 补 seed；Transformer 加 NoPE 层作完整上下文的外推对照；U-Delta 的两个归因实验（写入目标去掉 −μk 锚、μ 和记忆用各自的地址）；Transformer 学习率 1e-3；Transformer 和 U-Delta 各跑 2 倍步数。
 
 ## 数据与代码
@@ -192,7 +201,7 @@ y = μ z + E_tᵀ q_t，z = relu(K u + b)²
 log λ = expm1(−exp(1000 θ) · g)
 ```
 
-**结论**：15M：NLL 3.793（长度 1,024）、3.750（4,096），比 U-Delta-rawFFN（3.812）再好 0.019，是目前 15M 最好的统一 block，也赢 U-Delta+attn（3.840）0.047、Transformer（3 个 seed 平均 3.945）0.152（1 个 seed）。但只叠加了一部分：U-Delta-λlr1000 单独比 U-Delta 好 0.055，加在 U-Delta-rawFFN 上只再好 0.019。每个位置都比 U-Delta-rawFFN 好 0.017–0.020（前 64 个 token 4.153 对 4.170，512–1,024 3.748 对 3.768）。记忆几乎被关掉：有效记忆长度 12 层里有 10 层只有 1.1–2.2 个 token，只剩第 2、3 层记 38、22 个 token（U-Delta-rawFFN 是 5–509）。比 U-Delta-rawFFN 好 0.01 以上，照规则接着跑 42M（18:08 开始）；读到 20K：每一段都是 15M 最好的，16K–20K 3.713（U-Delta-λlr1000 3.752、U-Delta-rawFFN 3.760、U-Delta+attn 3.762、U-Delta 3.817、滑动窗口的 Transformer 3.874）。比 U-Delta-rawFFN 好的幅度越读越大：前 64 个 token 0.017、512–1,024 0.026、16K–20K 0.047，U-Delta-λlr1000 那一半带来的外推好处留住了。
+**结论**：15M 三个 seed：NLL 3.793、3.795、3.799（平均 3.796，标准差 0.003；长度 4,096 平均 3.753），比 U-Delta-rawFFN（3.812，1 个 seed）好约 0.016，是目前 15M 最好的统一 block，也赢 U-Delta+attn（3.840）0.044、Transformer（3 个 seed 平均 3.945，标准差 0.016）0.149。U-Delta-rawFFN+λlr1000 最差的 seed 也比 Transformer 最好的 seed（3.928）好 0.128，同一个 seed 配对每组差 0.134–0.161；每个位置都赢 Transformer，越后面赢越多（前 64 个 token 0.083，512–1,024 0.167）。以下是 seed 1337 的细节。但只叠加了一部分：U-Delta-λlr1000 单独比 U-Delta 好 0.055，加在 U-Delta-rawFFN 上只再好 0.019。每个位置都比 U-Delta-rawFFN 好 0.017–0.020（前 64 个 token 4.153 对 4.170，512–1,024 3.748 对 3.768）。记忆几乎被关掉：有效记忆长度 12 层里有 10 层只有 1.1–2.2 个 token，只剩第 2、3 层记 38、22 个 token（U-Delta-rawFFN 是 5–509）。比 U-Delta-rawFFN 好 0.01 以上，照规则接着跑 42M：第一次在第 2,424 步被节点重开机打断，2026-11-13 22:00 在 A6000 从头重跑。读到 20K：每一段都是 15M 最好的，16K–20K 3.713（U-Delta-λlr1000 3.752、U-Delta-rawFFN 3.760、U-Delta+attn 3.762、U-Delta 3.817、滑动窗口的 Transformer 3.874）。比 U-Delta-rawFFN 好的幅度越读越大：前 64 个 token 0.017、512–1,024 0.026、16K–20K 0.047，U-Delta-λlr1000 那一半带来的外推好处留住了。
 
 ### U-Delta-rawFFN：FFN 那一半读没范式的地址
 
