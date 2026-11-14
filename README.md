@@ -23,7 +23,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 ### 主張
 
 1. **15M：統一 block 贏 Transformer，三個 seed 都贏。** 3.796 對 3.945；同 seed 配對每組差 -0.161 到 -0.134，最差的統一 block seed 也比最好的 Transformer seed 好 0.128。要打折扣：15M 的 Transformer 不太會用前文（64–128 段到 512–1,024 段只降 0.064），這一點到 42M 消失。見[規模](docs/experiments/scale.md)、[多 seed](docs/experiments/seeds.md)。
-2. **42M：打平到略輸，沒有贏。** [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) 3.223 對 Transformer 3.214，輸 0.009（各 1 個 seed，比 15M Transformer 的 seed 標準差 0.016 小）；[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) 輸 0.014。開頭 64 個 token 還略贏，之後每段輸 0.009–0.012。15M 的大幅領先（0.149）到 42M 沒有了。見[規模](docs/experiments/scale.md)。
+2. **42M：打平到略輸，沒有贏。** [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) 3.223 對 Transformer 3.214，輸 0.009（各 1 個 seed，比 15M Transformer 的 seed 標準差 0.016 小）；[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) 輸 0.014。開頭 64 個 token 還略贏，之後每段輸 0.009–0.012。15M 的大幅領先（0.149）到 42M 沒有了。讀到 20K 追平滑動窗口的 Transformer（16K–20K 3.142 對 3.142）。見[規模](docs/experiments/scale.md)、[外推](docs/experiments/extrapolation.md)。
 3. **過了訓練長度不會崩。** 訓練長度 1,024、讀到 20,480 時，統一 block 的 16K–20K 段在 3.7–4.0（15M）；完整上下文的 Transformer 升到 5.999–6.088，只有推理時開滑動窗口才穩。見[外推](docs/experiments/extrapolation.md)。
 4. **比原版好 0.316，最大的一步是記憶的寫法。** 把格子裡的累計平均換成以 FFN 為錨的 delta rule 就好 0.214，見[記憶的寫法](docs/experiments/write-rule.md)；FFN 讀未歸一化位址再好 0.086，見 [FFN 讀哪個位址](docs/experiments/ffn-address.md)。
 5. **還沒證明的：共享位址不吃虧。** 在原版上，靜態和記憶格子分開位址（Split）比共享好 0.074，但多 16% 參數；U-Delta 系列還沒做這個對照。見[統一的對照](docs/experiments/unification.md)。
