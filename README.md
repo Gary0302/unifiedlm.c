@@ -4,6 +4,37 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 研究目标见 [`docs/research_goal.md`](docs/research_goal.md)，各规模的设置与训练命令见 [`docs/models.md`](docs/models.md)。
 
+## 当前进展（统一性实验，截至 2026-11-13）
+
+完整报告（命名、设置、全部结果表、每个实验的说明）见 [`docs/experiments.md`](docs/experiments.md)。FineWeb-Edu，Llama 2 32K 词表，所有模型同一个学习率、没有调参；除非注明，都是 1 个 seed。下面"U-Avg"指本仓库 `model.py` 的原版模型，"U-Delta"是把格子里的后验均值换成以 FFN 为锚的 delta rule 记忆，"U-Delta-rawFFN"再让 FFN 那一半读未归一化的 relu²（标准 ReLU² FFN）。
+
+| 验证 NLL @1024 | 15M | 42M |
+| --- | ---: | ---: |
+| Transformer（llama2.c 式） | 3.945（3 个 seed） | **3.214** |
+| U-Delta-rawFFN+λlr1000 | **3.793** | 训练中 |
+| U-Delta-rawFFN | 3.812 | 3.228 |
+| U-Delta+attn（对照，含 attention） | 3.840 | — |
+| U-Delta | 3.898（3 个 seed） | 3.350 |
+| GDN | 3.964 | — |
+| U-Gate | 3.998（3 个 seed） | 3.330（3 个 seed） |
+| U-Avg（原版） | 4.112（3 个 seed） | 3.423 |
+
+- **15M 统一 block 赢 Transformer**，最好的 U-Delta-rawFFN+λlr1000 领先 0.152；但 15M 的 Transformer 不太会用前文，领先有一部分来自这一点。
+- **42M 差一点追上**：U-Delta-rawFFN 只输 0.014。U-Delta 在 42M 输 0.136，主因是 FFN 读归一化地址；剩下的差距在 64–1,024 之间，不在开头。
+- **delta rule 远好于后验均值**：15M 时 U-Delta 3.898，U-Avg 4.112。
+- **记忆短一点更好**：放开遗忘率的学习率，模型把大部分层的记忆缩到约 1 个 token，NLL 反而变好；强迫保留慢记忆（U-Delta+slow、U-Delta-diverseλ）读到 4K 以后变差。
+- **过了训练长度不会崩**：读到 20K 时完整上下文的 Transformer 升到 6.1–6.3，统一 block 维持在 3.1–3.9（15M 最好的 U-Delta-rawFFN+λlr1000 在 16K–20K 是 3.713，滑动窗口的 Transformer 3.874）；但 42M 时仍比滑动窗口 1,024 的 Transformer 差 0.01–0.03。
+- **重要观察**：U-Delta 系列里，几乎所有格子的内容丢失都来自遗忘门，被新写入覆盖的不到 1%；记忆偏向写意外的 token，但预测到的、模型自己生成的 token 也照写（写入量和 token loss 的 Spearman 相关只有 0.14–0.21）。
+
+### 最新动态（2026-11-13 晚）
+
+- **U-Delta-rawFFN+λlr1000 越读越长越好**：读到 20K 时每一段都是 15M 最好的，16K–20K 3.713（滑动窗口 1,024 的 Transformer 三个 seed 平均 3.893，完整上下文的 Transformer 6.049）。比 U-Delta-rawFFN 的领先从开头的 0.017 增加到 16K–20K 的 0.047。
+- **15M 对 Transformer 的领先越往后越大**：长度 1,024 内从前 64 个 token 的 0.084 增加到 512–1,024 的 0.170。但 15M 的 Transformer 第 128 个 token 之后几乎不再进步，这一点到 42M 消失，所以 42M 才是真正的比较。
+- **42M 训练中**：U-Delta-rawFFN+λlr1000 第 1,000 步验证 loss 4.137，同一步 U-Delta-rawFFN 4.137、Transformer 4.155。这是训练中途的数字；U-Delta-rawFFN 当时也是前段领先、后段被 Transformer 追过，最终输 0.014。
+- **补 seed**：U-Delta-rawFFN+λlr1000 15M 正在补 seed 1338、1339。Transformer 三个 seed 的标准差是 0.016，U-Delta 是 0.003；目前 0.152 的领先远大于这个波动。
+
+实验代码在 `scripts/`（变体注册表 `scripts/variants.py`，U-Delta 系列在 `scripts/delta.py`），结果数据在 `scripts/reports/fineweb/`。依照 `AGENTS.md`，变体在赢之前不进 `model.py`，所以 `model.py` 仍然是 U-Avg。
+
 ## 模型
 
 每个 `UnifiedBlock` 对 RMSNorm 后的隐状态 `h_t` 做宽度 4 的因果深度卷积得到 `u_t`，用 relu² 产生对格子的寻址并归一化（分母里有一个可学习的空槽质量 `eps`）：
@@ -105,7 +136,7 @@ python eval/core_eval.py --checkpoint outputs/15M/best.pt
 > Once upon a time, there was a little girl named Lily. She loved to play outside in the sunshine. One day, she saw a big box in the sunshine. She asked her mommy, "What's wrong, Lily?" Her mommy said, "I lost my toy ice cream!"
 > Lily was sad and wanted to help her mommy. She asked her mommy if they could borrow it. They both smiled and said, "Thank you for my favorite toy is an easy secret." Lily was happy to help her mommy, and they all had a good friend.
 
-15M 及以上尚未完整训练。
+15M、42M、110M 在 FineWeb-Edu 上的结果见上面的「当前进展」和 [`docs/experiments.md`](docs/experiments.md)。
 
 ## 试过的其他做法
 
@@ -115,6 +146,8 @@ python eval/core_eval.py --checkpoint outputs/15M/best.pt
 - **更弱的先验（prior 0.4）**：15M、24.6M tokens 的短预算下验证 NLL 为 2.057，prior 4 为 1.962。
 
 另外几种变体（固定写入率、hash n-gram 格子、二值 spike / k-WTA 地址、有限 fan-in、共享权重循环）已经实现并通过了一致性检查，但还没有在文本上与标准配方比较。
+
+FineWeb-Edu 上的统一性实验（遗忘门、delta rule、FFN 地址、遗忘率、快慢记忆、外推、记忆任务，以及 Transformer、GDN、Mesa 等基线）见 [`docs/experiments.md`](docs/experiments.md)。
 
 ## 目录
 
@@ -131,10 +164,10 @@ climbmix.py     ClimbMix（同接口，来自 gdn.c）
 tokenizer.py    sentencepiece 封装与 .bin 导出
 test_all.py     一致性测试
 eval/           评测（CORE）
-docs/           研究目标、各规模设置、训练 kernel
+docs/           研究目标、各规模设置、训练 kernel、统一性实验报告
 ```
 
-`references/`（llama2.c、gdn.c 等上游与 baseline 仓库）、`scripts/`（开发脚本）、`data/`、`outputs/` 都在 `.gitignore` 里。baseline 在 `references/` 下用各自的代码训练和评测，例如：
+`references/`（llama2.c、gdn.c 等上游与 baseline 仓库）、`scripts/`（开发脚本）、`data/`、`outputs/` 都在 `.gitignore` 里。这个分支例外地提交了 `scripts/` 里的实验代码和结果数据（`git add -f`），方便复现报告里的数字。baseline 在 `references/` 下用各自的代码训练和评测，例如：
 
 ```bash
 git clone https://github.com/karpathy/llama2.c references/llama2.c
