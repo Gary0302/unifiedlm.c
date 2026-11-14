@@ -17,7 +17,7 @@
 
 | 實驗 | 問題 | 簡短回答 |
 | --- | --- | --- |
-| [規模：15M → 42M → 110M](experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 還差 0.014（U-Delta-rawFFN），最新的 42M 在訓練中。 |
+| [規模：15M → 42M → 110M](experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 打平到略輸：最好的 U-Delta-rawFFN+λlr1000 輸 0.009（1 個 seed）。 |
 | [多 seed 的穩定性](experiments/seeds.md) | 差距是不是 seed 的噪聲？ | 統一 block 的 seed 標準差約 0.003，Transformer 約 0.016；最新的統一 block 三個 seed 都贏。 |
 | [統一的對照：共享位址 vs 分開位址](experiments/unification.md) | 同一組格子同時當 FFN 和記憶，會不會比分開差？ | 原版上分開的好 0.074，但多 16% 參數；U-Delta 上還沒做。 |
 | [記憶的寫法：平均、遺忘門、delta rule](experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |
@@ -211,8 +211,8 @@
 
 ## 進行中與待決定
 
-- **進行中**：U-Delta-rawFFN+λlr1000 42M（約 9.5 小時；第一次在第 2,424 步被節點重啟打斷，2026-11-13 22:00 太平洋時間從頭重跑）。
-- **待決定**：記憶完全拿掉的對照（U-Delta-λlr1000 幾乎把記憶關掉，記憶還剩多少作用）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
+- **進行中**：U-Delta-rawFFN+λlr1000 42M 讀到 20K（2026-11-14 開始）。
+- **待決定**：42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；記憶完全拿掉的對照（U-Delta-λlr1000 幾乎把記憶關掉，記憶還剩多少作用）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
 
 ## 資料與程式碼
 

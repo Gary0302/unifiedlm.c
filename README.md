@@ -13,7 +13,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | 模型 | 是什麼 | 15M | 42M | 讀到 20K（15M，16K–20K 段） |
 | --- | --- | ---: | ---: | ---: |
 | [Transformer](docs/variants/transformer.md) | llama2.c 式基線 | 3.945（3 個 seed） | **3.214** | 6.049（完整上下文）/ 3.893（滑動窗口 1,024） |
-| **[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)** | 最新、最好的統一 block | **3.796**（3 個 seed） | 訓練中 | **3.713** |
+| **[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)** | 最新、最好的統一 block | **3.796**（3 個 seed） | 3.223 | **3.713** |
 | [U-Avg](docs/variants/u-avg.md) | 原版統一 block（`model.py`） | 4.112（3 個 seed） | 3.423 | — |
 
 驗證 NLL，長度 1,024，越低越好。15M 和 42M 的參數量與 Transformer 對齊到 ±2%。
@@ -23,7 +23,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 ### 主張
 
 1. **15M：統一 block 贏 Transformer，三個 seed 都贏。** 3.796 對 3.945；同 seed 配對每組差 -0.161 到 -0.134，最差的統一 block seed 也比最好的 Transformer seed 好 0.128。要打折扣：15M 的 Transformer 不太會用前文（64–128 段到 512–1,024 段只降 0.064），這一點到 42M 消失。見[規模](docs/experiments/scale.md)、[多 seed](docs/experiments/seeds.md)。
-2. **42M：還沒證明。** 目前最接近的是 [U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)，3.228 對 3.214，輸 0.014；差距在 64–1,024 之間，開頭 64 個 token 還略贏。U-Delta-rawFFN+λlr1000 的 42M 在訓練中。
+2. **42M：打平到略輸，沒有贏。** [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) 3.223 對 Transformer 3.214，輸 0.009（各 1 個 seed，比 15M Transformer 的 seed 標準差 0.016 小）；[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) 輸 0.014。開頭 64 個 token 還略贏，之後每段輸 0.009–0.012。15M 的大幅領先（0.149）到 42M 沒有了。見[規模](docs/experiments/scale.md)。
 3. **過了訓練長度不會崩。** 訓練長度 1,024、讀到 20,480 時，統一 block 的 16K–20K 段在 3.7–4.0（15M）；完整上下文的 Transformer 升到 5.999–6.088，只有推理時開滑動窗口才穩。見[外推](docs/experiments/extrapolation.md)。
 4. **比原版好 0.316，最大的一步是記憶的寫法。** 把格子裡的累計平均換成以 FFN 為錨的 delta rule 就好 0.214，見[記憶的寫法](docs/experiments/write-rule.md)；FFN 讀未歸一化位址再好 0.086，見 [FFN 讀哪個位址](docs/experiments/ffn-address.md)。
 5. **還沒證明的：共享位址不吃虧。** 在原版上，靜態和記憶格子分開位址（Split）比共享好 0.074，但多 16% 參數；U-Delta 系列還沒做這個對照。見[統一的對照](docs/experiments/unification.md)。
@@ -112,7 +112,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 | 實驗 | 問題 | 簡短回答 |
 | --- | --- | --- |
-| [規模：15M → 42M → 110M](docs/experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 還差 0.014（U-Delta-rawFFN），最新的 42M 在訓練中。 |
+| [規模：15M → 42M → 110M](docs/experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 打平到略輸：最好的 U-Delta-rawFFN+λlr1000 輸 0.009（1 個 seed）。 |
 | [多 seed 的穩定性](docs/experiments/seeds.md) | 差距是不是 seed 的噪聲？ | 統一 block 的 seed 標準差約 0.003，Transformer 約 0.016；最新的統一 block 三個 seed 都贏。 |
 | [統一的對照：共享位址 vs 分開位址](docs/experiments/unification.md) | 同一組格子同時當 FFN 和記憶，會不會比分開差？ | 原版上分開的好 0.074，但多 16% 參數；U-Delta 上還沒做。 |
 | [記憶的寫法：平均、遺忘門、delta rule](docs/experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |

@@ -2,7 +2,7 @@
 
 **問題**：15M 贏 Transformer 會不會只是小模型的現象？
 
-**簡短回答**：15M 贏；42M 還差 0.014（U-Delta-rawFFN），最新的 42M 在訓練中。
+**簡短回答**：15M 贏；42M 打平到略輸：最好的 U-Delta-rawFFN+λlr1000 輸 0.009（1 個 seed）。
 
 ## 怎麼做的
 
@@ -18,7 +18,7 @@
 | 模型 | 15M | 42M | 110M |
 | --- | ---: | ---: | ---: |
 | [Transformer](../variants/transformer.md) | 3.945（3 個 seed，3.928–3.957） | 3.214 | 2.822 |
-| [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3.796（3 個 seed，3.793–3.799） | 訓練中 | — |
+| [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3.796（3 個 seed，3.793–3.799） | 3.223 | — |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 3.812 | 3.228 | — |
 | [U-Delta](../variants/u-delta.md) | 3.898（3 個 seed，3.895–3.901） | 3.350 | — |
 | [U-Gate](../variants/u-gate.md) | 3.998（3 個 seed，3.988–4.003） | 3.330（3 個 seed，3.328–3.333） | — |
@@ -31,9 +31,10 @@
 | 模型 | 0–64 | 64–128 | 128–256 | 256–512 | 512–1024 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | [Transformer](../variants/transformer.md) | 3.628 | 3.293 | 3.233 | 3.182 | 3.164 |
+| [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3.624 | 3.305 | 3.241 | 3.193 | 3.174 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 3.623 | 3.307 | 3.245 | 3.196 | 3.179 |
 | [U-Delta](../variants/u-delta.md) | 3.757 | 3.437 | 3.369 | 3.317 | 3.299 |
-| U-Delta-rawFFN − Transformer | -0.005 | +0.014 | +0.013 | +0.014 | +0.016 |
+| U-Delta-rawFFN+λlr1000 − Transformer | -0.005 | +0.012 | +0.009 | +0.010 | +0.011 |
 
 ### 15M 按位置（長度 1,024，各 3 個 seed 平均）
 
@@ -47,7 +48,7 @@
 ## 結論
 
 - **15M 統一 block 贏 Transformer**：U-Delta-rawFFN+λlr1000 3.796（3 個 seed，3.793–3.799） 對 Transformer 3.945（3 個 seed，3.928–3.957），最差的 seed 也比 Transformer 最好的 seed 好 0.128。U-Delta 本身 3.898（3 個 seed，3.895–3.901） 也贏。
-- **42M 還差一點**：U-Delta 3.350 輸 0.136，FFN 改讀未歸一化位址的 U-Delta-rawFFN 3.228 只輸 0.014。前 64 個 token 還略贏，之後每段落後 0.013–0.016。U-Delta-rawFFN+λlr1000 的 42M 在訓練中。
+- **42M 打平到略輸，沒有贏**：U-Delta 3.350 輸 0.136，FFN 改讀未歸一化位址的 U-Delta-rawFFN 3.228 輸 0.014，再加遺忘率學快 1,000 倍的 U-Delta-rawFFN+λlr1000 3.223 輸 0.009（各 1 個 seed，比 15M Transformer 的 seed 標準差 0.016 小）。遺忘率學快在 15M 好 0.016，在 42M 只好 0.004。前 64 個 token 還略贏，之後每段輸 0.009–0.012。15M 的領先（U-Delta 0.047、U-Delta-rawFFN 0.133、U-Delta-rawFFN+λlr1000 0.149）到 42M 都沒有了。
 - **15M → 42M 變的是 Transformer**：15M 的 Transformer 從 64–128 段到 512–1,024 段只降 0.064，42M 降 0.129；U-Delta-rawFFN 兩個規模都約 0.12–0.13。15M 越往後贏越多，有一部分是小 Transformer 不太會用前文。
 - **110M 只跑了原版**：U-Avg 2.994 對 Transformer 2.822。U-Delta 系列還沒跑 110M。
 
