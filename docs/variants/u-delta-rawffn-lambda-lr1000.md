@@ -1,0 +1,59 @@
+# U-Delta-rawFFN+λlr1000（代號 `SDul`）
+
+**目前最新、最好的統一 block。** U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。
+
+- **類別**：主線（統一 block，不含 attention）
+- **基於**：[U-Delta-rawFFN](u-delta-rawffn.md)
+- **程式碼**：`scripts/delta.py` 的 `RawFFNFastRate1000DeltaBlock`，訓練時 `--variant=SDul`
+
+## 怎麼做的
+
+- U-Delta-rawFFN：y = μ z + Eᵀq，FFN 讀沒除總和的 relu²，記憶跟 U-Delta 一樣。
+- U-Delta-λlr1000：log_rate 存成 θ = log_rate ／ 1000，Adam 的步伐等於讓 log_rate 學快 1,000 倍；起點一樣。
+- U-Delta-rawFFN+λlr1000：兩個都做，其他跟 U-Delta-rawFFN 一樣。參數、狀態跟 U-Delta 一樣。
+
+**問題**：U-Delta-rawFFN（15M 好 0.086，每個位置差不多）和 U-Delta-λlr1000（好 0.055，越後面越多）進步的位置不一樣。合在一起能不能疊加？U-Delta-rawFFN 42M 只輸 Transformer 0.014，而且差距在 64 之後、越後面越大，正好是 U-Delta-λlr1000 進步的地方。
+
+```text
+y = μ z + E_tᵀ q_t，z = relu(K u + b)²
+log λ = expm1(−exp(1000 θ) · g)
+```
+
+**設定**：15M（12 層、2,300 步），跟 U-Delta-rawFFN 15M 同設定；比 U-Delta-rawFFN 好 0.01 以上就接著跑 42M（16 層、6,400 步，約 9.5 小時）；參數：15.45M（同 U-Delta）。
+
+## 結果
+
+FineWeb-Edu 驗證集，NLL 越低越好；括號裡是 seed 範圍。設定見 [實驗報告索引](../experiments.md#設定)。
+
+| 規模 | run | seed 數 | 參數量 | 驗證 NLL @1024 | @4096 | 前 64 個 token | 512–1,024 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 15M | `fwsdul15m`（+2 個 seed） | 3 | 15.45M | 3.796（3.793–3.799） | 3.753 | 4.154 | 3.751 |
+| 42M | `fw42m_sdul` | — | — | 訓練中 |  |  |  |
+
+讀到 20K（訓練長度 20 倍）的 16K–20K 段：3.713。
+
+每層有效記憶長度（遺忘門衰減到 1/e 的 token 數，第 0 → 11 層）：2 / 38 / 22 / 1 / 2 / 1 / 1 / 1 / 2 / 1 / 2 / 1。
+
+## 結論
+
+15M 三個 seed：NLL 3.793、3.795、3.799（平均 3.796，標準差 0.003；長度 4,096 平均 3.753），比 U-Delta-rawFFN（3.812，1 個 seed）好約 0.016，是目前 15M 最好的統一 block，也贏 U-Delta+attn（3.840）0.044、Transformer（3 個 seed 平均 3.945，標準差 0.016）0.149。U-Delta-rawFFN+λlr1000 最差的 seed 也比 Transformer 最好的 seed（3.928）好 0.128，同一個 seed 配對每組差 0.134–0.161；每個位置都贏 Transformer，越後面贏越多（前 64 個 token 0.083，512–1,024 0.167）。以下是 seed 1337 的細節。但只疊加了一部分：U-Delta-λlr1000 單獨比 U-Delta 好 0.055，加在 U-Delta-rawFFN 上只再好 0.019。每個位置都比 U-Delta-rawFFN 好 0.017–0.020（前 64 個 token 4.153 對 4.170，512–1,024 3.748 對 3.768）。記憶幾乎被關掉：有效記憶長度 12 層裡有 10 層只有 1.1–2.2 個 token，只剩第 2、3 層記 38、22 個 token（U-Delta-rawFFN 是 5–509）。比 U-Delta-rawFFN 好 0.01 以上，照規則接著跑 42M：第一次在第 2,424 步被節點重開機打斷，2026-11-13 22:00 在 A6000 從頭重跑。讀到 20K：每一段都是 15M 最好的，16K–20K 3.713（U-Delta-λlr1000 3.752、U-Delta-rawFFN 3.760、U-Delta+attn 3.762、U-Delta 3.817、滑動窗口的 Transformer 3.874）。比 U-Delta-rawFFN 好的幅度越讀越大：前 64 個 token 0.017、512–1,024 0.026、16K–20K 0.047，U-Delta-λlr1000 那一半帶來的外推好處留住了。
+
+## 相關實驗
+
+- [規模：15M → 42M → 110M](../experiments/scale.md)
+- [記憶設計：快記憶、慢記憶、遺忘率](../experiments/memory-design.md)
+- [長上下文與外推（讀到 20K）](../experiments/extrapolation.md)
+- [多 seed 的穩定性](../experiments/seeds.md)
+
+## 重現
+
+在倉庫根目錄執行（需要 CUDA；FineWeb 子集見 `scripts/fineweb/fineweb_subset.py`）：
+
+```bash
+# 15M（scripts/nrp/fwsdul.txt）
+python scripts/train_variant.py --out_dir=outputs/fwsdul15m --variant=SDul --hidden_dim=712 --dataset=fineweb --dim=288 --n_layers=12 --max_seq_len=1024 --vocab_source=llama2 --vocab_size=32000 --batch_size=16 --gradient_accumulation_steps=8 --learning_rate=5e-4 --warmup_iters=360 --max_iters=2300 --weight_decay=0.1 --beta2=0.95 --dropout=0.0 --eval_interval=500 --eval_iters=50
+python scripts/fineweb/eval_fineweb.py --out_dir=outputs/fwsdul15m
+# 42M（scripts/nrp/fwsdul42m.txt）
+python scripts/train_variant.py --out_dir=outputs/fw42m_sdul --variant=SDul --hidden_dim=1248 --dim=512 --n_layers=16 --batch_size=8 --gradient_accumulation_steps=16 --warmup_iters=1000 --max_iters=6400 --dataset=fineweb --max_seq_len=1024 --vocab_source=llama2 --vocab_size=32000 --learning_rate=5e-4 --weight_decay=0.1 --beta2=0.95 --dropout=0.0 --eval_interval=500 --eval_iters=50
+python scripts/fineweb/eval_fineweb.py --out_dir=outputs/fw42m_sdul
+```

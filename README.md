@@ -4,36 +4,129 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 研究目标见 [`docs/research_goal.md`](docs/research_goal.md)，各规模的设置与训练命令见 [`docs/models.md`](docs/models.md)。
 
-## 当前进展（统一性实验，截至 2026-11-14）
+## 當前進展（統一性實驗，截至 2026-11-14）
 
-完整报告（命名、设置、全部结果表、每个实验的说明）见 [`docs/experiments.md`](docs/experiments.md)。FineWeb-Edu，Llama 2 32K 词表，所有模型同一个学习率、没有调参；除非注明，都是 1 个 seed。下面"U-Avg"指本仓库 `model.py` 的原版模型，"U-Delta"是把格子里的后验均值换成以 FFN 为锚的 delta rule 记忆，"U-Delta-rawFFN"再让 FFN 那一半读未归一化的 relu²（标准 ReLU² FFN）。
+目標：**不含 attention 的統一 block**——同一組格子同時當 FFN 和上下文記憶——在同樣的資料、步數和學習率下，達到同規模 Transformer 的語言建模質量。FineWeb-Edu，Llama 2 32K 詞表，所有模型用同一個學習率 5e-4，沒有調參。完整報告（設定、全部結果表）見 [`docs/experiments.md`](docs/experiments.md)。
 
-| 验证 NLL @1024 | 15M | 42M |
-| --- | ---: | ---: |
-| Transformer（llama2.c 式） | 3.945（3 个 seed） | **3.214** |
-| U-Delta-rawFFN+λlr1000 | **3.796**（3 个 seed） | 训练中 |
-| U-Delta-rawFFN | 3.812 | 3.228 |
-| U-Delta+attn（对照，含 attention） | 3.840 | — |
-| U-Delta | 3.898（3 个 seed） | 3.350 |
-| GDN | 3.964 | — |
-| U-Gate | 3.998（3 个 seed） | 3.330（3 个 seed） |
-| U-Avg（原版） | 4.112（3 个 seed） | 3.423 |
+### 結果
 
-- **15M 统一 block 赢 Transformer**，最好的 U-Delta-rawFFN+λlr1000 领先 0.149（各 3 个 seed，最差的 seed 也比 Transformer 最好的 seed 好 0.128）；但 15M 的 Transformer 不太会用前文，领先有一部分来自这一点。
-- **42M 差一点追上**：U-Delta-rawFFN 只输 0.014。U-Delta 在 42M 输 0.136，主因是 FFN 读归一化地址；剩下的差距在 64–1,024 之间，不在开头。
-- **delta rule 远好于后验均值**：15M 时 U-Delta 3.898，U-Avg 4.112。
-- **记忆短一点更好**：放开遗忘率的学习率，模型把大部分层的记忆缩到约 1 个 token，NLL 反而变好；强迫保留慢记忆（U-Delta+slow、U-Delta-diverseλ）读到 4K 以后变差。
-- **过了训练长度不会崩**：读到 20K 时完整上下文的 Transformer 升到 6.1–6.3，统一 block 维持在 3.1–3.9（15M 最好的 U-Delta-rawFFN+λlr1000 在 16K–20K 是 3.713，滑动窗口的 Transformer 3.874）；但 42M 时仍比滑动窗口 1,024 的 Transformer 差 0.01–0.03。
-- **重要观察**：U-Delta 系列里，几乎所有格子的内容丢失都来自遗忘门，被新写入覆盖的不到 1%；记忆偏向写意外的 token，但预测到的、模型自己生成的 token 也照写（写入量和 token loss 的 Spearman 相关只有 0.14–0.21）。
+| 模型 | 是什麼 | 15M | 42M | 讀到 20K（15M，16K–20K 段） |
+| --- | --- | ---: | ---: | ---: |
+| [Transformer](docs/variants/transformer.md) | llama2.c 式基線 | 3.945（3 個 seed） | **3.214** | 6.049（完整上下文）/ 3.893（滑動窗口 1,024） |
+| **[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)** | 最新、最好的統一 block | **3.796**（3 個 seed） | 訓練中 | **3.713** |
+| [U-Avg](docs/variants/u-avg.md) | 原版統一 block（`model.py`） | 4.112（3 個 seed） | 3.423 | — |
 
-### 最新动态（2026-11-14）
+驗證 NLL，長度 1,024，越低越好。15M 和 42M 的參數量與 Transformer 對齊到 ±2%。
 
-- **补 seed 后领先站得住**：U-Delta-rawFFN+λlr1000 15M 三个 seed 3.793、3.795、3.799（平均 3.796，标准差 0.003），Transformer 三个 seed 3.928–3.957（平均 3.945，标准差 0.016）。同 seed 配对每组差 0.134–0.161；长度 4,096 时 3.753 对 5.016。
-- **U-Delta-rawFFN+λlr1000 越读越长越好**：读到 20K 时每一段都是 15M 最好的，16K–20K 3.713（滑动窗口 1,024 的 Transformer 三个 seed 平均 3.893，完整上下文的 Transformer 6.049）。比 U-Delta-rawFFN 的领先从开头的 0.017 增加到 16K–20K 的 0.047。
-- **15M 对 Transformer 的领先越往后越大**（3 个 seed 平均）：长度 1,024 内从前 64 个 token 的 0.083 增加到 512–1,024 的 0.167。但 15M 的 Transformer 第 128 个 token 之后几乎不再进步，这一点到 42M 消失，所以 42M 才是真正的比较。
-- **42M 训练中**：第一次跑到第 2,424 步时节点被排定重启，checkpoint 在 pod 临时空间里一起丢了，2026-11-13 22:00（太平洋时间）从头重跑，预计 2026-11-14 06:20 跑完。第一次跑时第 1,000 步验证 loss 4.137、第 2,000 步 3.595，同一步 U-Delta-rawFFN 4.137、3.592，Transformer 4.155、3.589。U-Delta-rawFFN 当时也是前段领先、后段被 Transformer 追过，最终输 0.014。
+從原版到現在（15M）：[U-Avg](docs/variants/u-avg.md) 4.112 → 記憶改用 delta rule（[U-Delta](docs/variants/u-delta.md)）3.898 → FFN 那一半讀未歸一化的位址（[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)）3.812 → 遺忘率學快 1,000 倍（[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)）3.796。
 
-实验代码在 `scripts/`（变体注册表 `scripts/variants.py`，U-Delta 系列在 `scripts/delta.py`），结果数据在 `scripts/reports/fineweb/`。依照 `AGENTS.md`，变体在赢之前不进 `model.py`，所以 `model.py` 仍然是 U-Avg。
+### 主張
+
+1. **15M：統一 block 贏 Transformer，三個 seed 都贏。** 3.796 對 3.945；同 seed 配對每組差 -0.161 到 -0.134，最差的統一 block seed 也比最好的 Transformer seed 好 0.128。要打折扣：15M 的 Transformer 不太會用前文（64–128 段到 512–1,024 段只降 0.064），這一點到 42M 消失。見[規模](docs/experiments/scale.md)、[多 seed](docs/experiments/seeds.md)。
+2. **42M：還沒證明。** 目前最接近的是 [U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)，3.228 對 3.214，輸 0.014；差距在 64–1,024 之間，開頭 64 個 token 還略贏。U-Delta-rawFFN+λlr1000 的 42M 在訓練中。
+3. **過了訓練長度不會崩。** 訓練長度 1,024、讀到 20,480 時，統一 block 的 16K–20K 段在 3.7–4.0（15M）；完整上下文的 Transformer 升到 5.999–6.088，只有推理時開滑動窗口才穩。見[外推](docs/experiments/extrapolation.md)。
+4. **比原版好 0.316，最大的一步是記憶的寫法。** 把格子裡的累計平均換成以 FFN 為錨的 delta rule 就好 0.214，見[記憶的寫法](docs/experiments/write-rule.md)；FFN 讀未歸一化位址再好 0.086，見 [FFN 讀哪個位址](docs/experiments/ffn-address.md)。
+5. **還沒證明的：共享位址不吃虧。** 在原版上，靜態和記憶格子分開位址（Split）比共享好 0.074，但多 16% 參數；U-Delta 系列還沒做這個對照。見[統一的對照](docs/experiments/unification.md)。
+
+### 主要觀察
+
+- **記憶短一點更好，短到上限還在變好。** 放開遺忘率的學習率，模型把大部分層的記憶縮到約 1 個 token，NLL 反而變好，讀到 20K 也越讀越好；強迫保留慢記憶（U-Delta+slow、U-Delta-diverseλ）讀到 4K 以後變差。見[記憶設計](docs/experiments/memory-design.md)。
+- **單一記憶就夠，不需要第二份慢記憶。** U-Delta+slow 的慢記憶沒學（速率停在初始值）；同容量的兩份快記憶跟一份一樣；單一記憶讓中間層忘快一點就追平它。
+- **內容主要是被遺忘掉的，不是被新寫入覆蓋掉的。** 絕大多數格子覆寫占比不到 1%，遺忘門讓實際遺忘比基礎速率快約 10–35 倍；只有少數常被寫的格子覆寫較重（U-Delta 第 6–9 層按層平均 13–22%）。見[遺忘還是覆寫](docs/experiments/forgetting-vs-overwrite.md)。
+- **記憶偏向寫意外的 token，但很弱。** 寫入量和 token loss 的 Spearman 相關只有 0.14–0.21；模型自己 greedy 生成（幾乎都是預測到的）時寫入量還有真實文字的 0.52–0.74 倍。見[寫入量與 loss](docs/experiments/write-vs-loss.md)。
+- **每一層自己決定記多久。** 從同一個起點出發，訓練完第 0 層只記幾個 token，第 1–4、11 層記幾百個。
+- **U-Delta 贏 GDN 不是因為卷積、狀態大小或寫入規則**，而是以 FFN 為錨的格子；統一 block 原本弱在開頭 64 個 token，來自 FFN 讀歸一化位址，U-Delta-rawFFN 補平了。見 [U-Delta 為什麼贏 GDN](docs/experiments/vs-gdn.md)。
+- **純記憶題上只有 U-Delta 系列外推**：訓練時間隔最多 256，間隔 4,096 時 U-Delta 仍有 99.95%，Transformer 和原版 0%。見[記憶任務](docs/experiments/memory-tasks.md)。
+
+### 變體
+
+每個變體一份文件：改了什麼、公式、程式碼位置、結果、重現命令。15M 驗證 NLL（長度 1,024）。
+
+**主線**（統一 block，不含 attention）
+
+| 變體 | 改了什麼 | 15M |
+| --- | --- | ---: |
+| [U-Avg](docs/variants/u-avg.md) | 原版 UnifiedLM，也就是本倉庫 `model.py` 的標準模型：同一組格子既當 FFN 又當上下文記憶，格子裡存“先驗 + 上下文證據”的後驗均值。 | 4.112（3 個 seed，4.107–4.116） |
+| [U-Delta](docs/variants/u-delta.md) | 把格子裡的“後驗均值”換成以 FFN 為錨的 delta rule 記憶：記憶只存 FFN 沒預測到的部分，同一個位址的新值按比例覆蓋舊值。 | 3.898（3 個 seed，3.895–3.901） |
+| [U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) | U-Delta 的 FFN 那一半改讀未歸一化的 relu²（就是標準的 ReLU² FFN），記憶那一半不變。 | 3.812 |
+| [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) | U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。 | 3.796（3 個 seed，3.793–3.799） |
+
+**記憶設計**
+
+| 變體 | 改了什麼 | 15M |
+| --- | --- | ---: |
+| [U-Delta-λlr10](docs/variants/u-delta-lambda-lr10.md) | U-Delta 的每格基礎遺忘率 `log_rate` 有效學習率 ×10（重參數化，起點不變）。 | 3.887 |
+| [U-Delta-λlr100](docs/variants/u-delta-lambda-lr100.md) | U-Delta 的 `log_rate` 有效學習率 ×100。 | 3.851 |
+| [U-Delta-λlr1000](docs/variants/u-delta-lambda-lr1000.md) | U-Delta 的 `log_rate` 有效學習率 ×1000：幾乎每層都把記憶縮到上限（約 1 個 token）。 | 3.843 |
+| [U-Delta-spreadλ](docs/variants/u-delta-spread-lambda.md) | U-Delta 的遺忘率初始值分散在 1/(L/4)～1/(16L)：同一份記憶裡有快有慢。 | 3.890 |
+| [U-Delta-diverseλ](docs/variants/u-delta-diverse-lambda.md) | U-Delta 的基礎記憶長度從 4 到 65,536 個 token 分散，門最多隻能讓遺忘快 2 倍，所以慢格子留得住。 | 3.877 |
+| [U-Delta-docreset](docs/variants/u-delta-docreset.md) | U-Delta 遇到文件開頭（BOS）就清空記憶。 | 3.890 |
+| [U-Delta+slow](docs/variants/u-delta-plus-slow.md) | U-Delta 再加一份慢記憶（每格固定速率，起點 1/(16L)）和讀出混合 ρ。 | 3.888 |
+| [U-Delta+fast2](docs/variants/u-delta-plus-fast2.md) | U-Delta+slow 的同容量對照：第二份記憶也是普通的快記憶，狀態大小相同。 | 3.897 |
+
+**位址尖銳度**
+
+| 變體 | 改了什麼 | 15M |
+| --- | --- | ---: |
+| [U-Delta-learnP](docs/variants/u-delta-learnp.md) | U-Delta 每層的位址次方 p 可學（從 2 開始）。 | 3.892 |
+| [U-Delta-ReLU4](docs/variants/u-delta-relu4.md) | U-Delta 前 4 個 block 用 ReLU 位址（p = 1），上面照舊 relu²。 | 3.894 |
+
+**遺忘門**
+
+| 變體 | 改了什麼 | 15M |
+| --- | --- | ---: |
+| [U-Gate](docs/variants/u-gate.md) | U-Avg 加上按內容決定的遺忘門：每個格子、每個 token 的遺忘率由位址算出。 | 3.998（3 個 seed，3.988–4.003） |
+| [U-Gate-fastinit](docs/variants/u-gate-fastinit.md) | U-Gate 的對照：U-Avg 只把遺忘率起點從 1/(4L) 調快到 1/64（U-Gate 的門最後停的位置附近），仍是每層一個、可學。 | 4.051（3 個 seed，4.049–4.052） |
+| [U-Gate-nogate](docs/variants/u-gate-nogate.md) | U-Gate 的消融：每格各自的遺忘率，沒有門，也沒有寫入時的遺忘項。 | 4.124 |
+| [U-Gate-rank64](docs/variants/u-gate-rank64.md) | U-Gate 的門低秩從 16 加到 64。 | 3.977 |
+| [U-Gate-fromh](docs/variants/u-gate-fromh.md) | U-Gate 的門改從 block 輸入 h 讀（原本從位址 r 讀）。 | 4.012 |
+| [U-Gate-silu](docs/variants/u-gate-silu.md) | U-Gate 的門中間加一層 SiLU（兩層 MLP 的門）。 | 4.002 |
+
+**統一的對照**
+
+| 變體 | 改了什麼 | 15M |
+| --- | --- | ---: |
+| [Split](docs/variants/split.md) | 統一的對照：靜態格子和上下文格子用各自的位址，兩組格子不共享。 | 4.038（3 個 seed，4.034–4.040） |
+
+**基線**
+
+| 變體 | 改了什麼 | 15M |
+| --- | --- | ---: |
+| [Transformer](docs/variants/transformer.md) | llama2.c 式 Transformer 基線：RoPE attention + SwiGLU FFN，參數量跟統一 block 對齊。 | 3.945（3 個 seed，3.928–3.957） |
+| [GDN](docs/variants/gdn.md) | 線性遞歸（SSM 類）基線：Transformer 的 attention 換成 Gated DeltaNet（6 個 head × 48）。 | 3.964 |
+| [GDN-bigstate](docs/variants/gdn-bigstate.md) | 我們自己的 GDN 變體：2 個大 head（各 144 維），狀態約 3 倍，衰減用平滑上下限。 | 3.964 |
+| [GDN-2](docs/variants/gdn-2.md) | NVIDIA Gated DeltaNet-2：抹除門和寫入門分開，衰減按通道。 | 3.970 |
+| [Mesa](docs/variants/mesa.md) | Mesa layer：每個 token 精確解一次加權最小平方（GDN 和 U-Delta 的 delta rule 每步只往這個解走一步）。 | 3.969 |
+
+**含 attention 的對照**（只當參考，不算統一 block）
+
+| 變體 | 改了什麼 | 15M |
+| --- | --- | ---: |
+| [U-Delta+attn](docs/variants/u-delta-plus-attn.md) | 對照組，含 attention，不算統一 block：每 4 個 U-Delta block 後面插一個窗口 128 的局部 attention 半層。 | 3.840 |
+| [Transformer+conv](docs/variants/transformer-conv.md) | Transformer 在 attention 前加上跟 U-Delta 一樣的寬 4 因果卷積：看 U-Delta 的優勢是不是卷積帶來的。 | 3.921 |
+| [Transformer+SSMax](docs/variants/transformer-ssmax.md) | Transformer 的 attention 換成 Scalable-Softmax（logits 乘 s·log n），想讓它讀長文時不變鈍。 | 3.913 |
+
+### 實驗
+
+每個實驗一份文件：問題、怎麼做的、結果表、結論、注意事項。
+
+| 實驗 | 問題 | 簡短回答 |
+| --- | --- | --- |
+| [規模：15M → 42M → 110M](docs/experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 還差 0.014（U-Delta-rawFFN），最新的 42M 在訓練中。 |
+| [多 seed 的穩定性](docs/experiments/seeds.md) | 差距是不是 seed 的噪聲？ | 統一 block 的 seed 標準差約 0.003，Transformer 約 0.016；最新的統一 block 三個 seed 都贏。 |
+| [統一的對照：共享位址 vs 分開位址](docs/experiments/unification.md) | 同一組格子同時當 FFN 和記憶，會不會比分開差？ | 原版上分開的好 0.074，但多 16% 參數；U-Delta 上還沒做。 |
+| [記憶的寫法：平均、遺忘門、delta rule](docs/experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |
+| [FFN 那一半讀哪個位址](docs/experiments/ffn-address.md) | U-Delta 到 42M 為什麼輸 Transformer？ | FFN 讀歸一化位址是瓶頸；改讀 relu² 後 15M 好 0.086、42M 好 0.122。 |
+| [記憶設計：快記憶、慢記憶、遺忘率](docs/experiments/memory-design.md) | 需要慢記憶嗎？遺忘率怎麼設？ | 不需要慢記憶；記憶越短越好，短到上限還在變好。 |
+| [內容是被遺忘還是被覆寫](docs/experiments/forgetting-vs-overwrite.md) | 格子丟掉內容，是衰減還是被新寫入覆蓋？ | 典型格子是衰減（覆寫不到 1%）；少數常被寫的格子覆寫較重。 |
+| [寫入量與 loss](docs/experiments/write-vs-loss.md) | 記憶是不是隻寫沒預測到的 token？ | 只是偏向，相關 0.14–0.21；自己預測到的也照寫。 |
+| [位址尖銳度](docs/experiments/sharpness.md) | 位址更尖（更大的次方）會不會更好？ | 不會：可學的次方停在 2.0–2.35，NLL 不變。 |
+| [U-Delta 為什麼贏 GDN](docs/experiments/vs-gdn.md) | 同樣是 delta rule，差在哪？ | 不是卷積、狀態大小或寫入規則，是以 FFN 為錨的格子。 |
+| [長上下文與外推（讀到 20K）](docs/experiments/extrapolation.md) | 過了訓練長度會不會崩？ | 統一 block 都不崩；Transformer 只有開滑動窗口才不崩。 |
+| [記憶任務 m2kv](docs/experiments/memory-tasks.md) | 純記憶題能記多遠？ | 只有 U-Delta 系列外推：間隔 4,096 仍有 99.95%。 |
+| [含 attention 的對照](docs/experiments/attention-control.md) | 加回局部 attention 能好多少？ | 好 0.058，但不含 attention 的最新版本已經贏它。 |
+
+實驗程式碼在 `scripts/`（變體註冊表 `scripts/variants.py`，U-Delta 系列在 `scripts/delta.py`），結果資料在 `scripts/reports/fineweb/`。依照 `AGENTS.md`，變體在贏之前不進 `model.py`，所以 `model.py` 仍然是 U-Avg。
 
 ## 模型
 
