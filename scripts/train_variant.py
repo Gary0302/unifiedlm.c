@@ -4,8 +4,13 @@ Train one ablation variant with the unmodified training loop. Run from the repos
 $ python scripts/train_variant.py --variant=P --m_s=105 --m_f=70 --out_dir=runs/x [train.py flags]
 
 Writes out_dir/variant.json, which scripts/eval_nll.py requires: D has the same state dict as S, so the
-checkpoint alone cannot tell them apart. Resuming is refused, because train.py restarts the data stream on
-resume while the learning rate continues; an interrupted run is rerun from scratch.
+checkpoint alone cannot tell them apart.
+
+Resuming (--init_from=resume, out_dir/ckpt.pt from an interrupted run) is FineWeb only. train.py restarts the data
+stream on resume, so the training stream here skips the iter_num * gradient_accumulation_steps * batch_size windows
+the run already used, and the resumed run sees the same batches as an uninterrupted one. Other datasets refuse to
+resume. With CKPT_MIRROR=<dir>, every ckpt.pt that train.py saves is copied there with train.log, for another pod
+to resume from.
 """
 import json
 import os
@@ -25,8 +30,9 @@ for arg in sys.argv[1:]:
 out_dir = next((a.split("=", 1)[1] for a in argv if a.startswith("--out_dir=")), None)
 if out_dir is None:
     raise SystemExit("--out_dir is required")
-if "--init_from=resume" in argv:
-    raise SystemExit("resuming is refused: rerun from scratch")
+resume = "--init_from=resume" in argv
+if resume and own["dataset"] not in ("fineweb", "fineweb4"):
+    raise SystemExit("resuming is FineWeb only: rerun from scratch")
 sys.argv = [sys.argv[0]] + argv
 
 import export    # noqa: E402
@@ -41,6 +47,23 @@ if own["dataset"] in ("fineweb", "fineweb4"):  # 2-of-14 or 4-of-14 subset; trai
     sys.modules["tinystories"] = fineweb_subset
     seed = next((int(a.split("=", 1)[1]) for a in argv if a.startswith("--seed=")), 1337)
     fineweb_subset.DATA_SEED = seed - 1337  # as for BabyLM, a new seed changes the data order too
+    if resume:  # the first training stream train.py opens skips what the run already trained on
+        import torch  # noqa: E402
+        ck = torch.load(os.path.join(out_dir, "ckpt.pt"), map_location="cpu")
+        skip = ck["iter_num"] * ck["config"]["gradient_accumulation_steps"] * ck["config"]["batch_size"]
+        print(f"resuming at iter {ck['iter_num']}: skipping the first {skip:,} training windows")
+        del ck
+        stream = fineweb_subset.fineweb.PretokDataset.__iter__
+
+        def skipped(self):
+            g = stream(self)
+            if self.split == "train" and skipped.left:
+                n, skipped.left = skipped.left, 0
+                for _ in range(n):
+                    next(g)
+            yield from g
+        skipped.left = skip
+        fineweb_subset.fineweb.PretokDataset.__iter__ = skipped
 elif own["dataset"] == "babylm":  # train.py imports its Task from tinystories
     sys.path.insert(0, os.path.join(os.getcwd(), "scripts", "babylm"))
     import babylm  # noqa: E402
@@ -50,6 +73,21 @@ elif own["dataset"] == "babylm":  # train.py imports its Task from tinystories
 elif own["dataset"] != "tinystories":
     raise SystemExit(f"unknown dataset {own['dataset']}")
 export.model_export = lambda *a, **k: None       # the run.c format belongs to the standard model
+mirror = os.environ.get("CKPT_MIRROR")
+if mirror:
+    import shutil  # noqa: E402
+    import torch   # noqa: E402
+    save = torch.save
+
+    def save_and_mirror(obj, f, *a, **k):  # after train.py writes ckpt.pt, copy it and train.log, ckpt.pt last
+        save(obj, f, *a, **k)
+        if isinstance(f, str) and os.path.basename(f) == "ckpt.pt":
+            os.makedirs(mirror, exist_ok=True)
+            for name in ("train.log", "ckpt.pt"):
+                if os.path.exists(os.path.join(out_dir, name)):
+                    shutil.copyfile(os.path.join(out_dir, name), os.path.join(mirror, name + ".tmp"))
+                    os.replace(os.path.join(mirror, name + ".tmp"), os.path.join(mirror, name))
+    torch.save = save_and_mirror
 
 os.makedirs(out_dir, exist_ok=True)
 with open(os.path.join(out_dir, "variant.json"), "w") as f:

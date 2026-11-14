@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Runs line JOB_COMPLETION_INDEX of a plan file, "<name> <flags...>". Trains on local disk, then publishes the
-# finished run to the PVC with a rename, so a run directory on the PVC is always complete.
+# finished run to the PVC with a rename, so a run directory on the PVC is always complete. A FineWeb line also
+# copies each checkpoint (ckpt.pt at every eval, with train.log) to <plan>/.resume/<name> on the PVC; a pod that
+# takes over a line whose pod was stopped resumes from there, and the copy is deleted once the run is published.
+# train_seconds in timing.json counts this pod only.
 set -euo pipefail
 # compiled graphs and kernels are cached on the PVC, so a variant compiles once per GPU type instead of once per run
 export TORCHINDUCTOR_CACHE_DIR=/workspace/cache/inductor TORCHINDUCTOR_FX_GRAPH_CACHE=1 TORCHINDUCTOR_AUTOGRAD_CACHE=1
@@ -10,6 +13,7 @@ LINE=$(sed -n "$((JOB_COMPLETION_INDEX + 1))p" "scripts/nrp/$PLAN")
 NAME=${LINE%% *}
 FLAGS=${LINE#* }
 OUT=/workspace/runs/${PLAN%.txt}/$NAME
+RESUME=/workspace/runs/${PLAN%.txt}/.resume/$NAME
 if [ -e "$OUT/eval.json" ]; then
     echo "$NAME is already complete at $OUT"
     exit 0
@@ -28,7 +32,17 @@ if [[ $PLAN == mem* ]]; then  # synthetic memory tasks write their own eval.json
     python scripts/memory/mqar.py --out_dir="$LOCAL" $FLAGS 2>&1 | tee "$LOCAL/train.log"
     TRAIN_SECONDS=$((SECONDS - START))
 else
-    python scripts/train_variant.py --out_dir="$LOCAL" $FLAGS 2>&1 | tee "$LOCAL/train.log"
+    MIRROR="" RESUMED=""
+    if [[ $PLAN == fw* ]]; then
+        MIRROR=$RESUME
+        if [ -s "$RESUME/ckpt.pt" ]; then  # an earlier pod was stopped: continue from its last eval
+            cp "$RESUME/ckpt.pt" "$LOCAL/"
+            if [ -e "$RESUME/train.log" ]; then cp "$RESUME/train.log" "$LOCAL/"; fi
+            RESUMED=--init_from=resume
+            echo "resuming $NAME from $RESUME"
+        fi
+    fi
+    CKPT_MIRROR=$MIRROR python scripts/train_variant.py --out_dir="$LOCAL" $FLAGS $RESUMED 2>&1 | tee -a "$LOCAL/train.log"
     TRAIN_SECONDS=$((SECONDS - START))
     EVAL=scripts/eval_nll.py
     [[ $PLAN == babylm* ]] && EVAL=scripts/babylm/eval_babylm.py
@@ -43,9 +57,10 @@ else
         python scripts/fineweb/gates.py --out_dir="$LOCAL" > "$LOCAL/gates.log" 2>&1 || true
     fi
 fi
-echo "{\"name\": \"$NAME\", \"node\": \"${NODE_NAME:-unknown}\", \"train_seconds\": $TRAIN_SECONDS}" > "$LOCAL/timing.json"
+echo "{\"name\": \"$NAME\", \"node\": \"${NODE_NAME:-unknown}\", \"train_seconds\": $TRAIN_SECONDS, \"resumed\": $([ -n "${RESUMED:-}" ] && echo true || echo false)}" > "$LOCAL/timing.json"
 
 rm -rf "$OUT.tmp"
 cp -r "$LOCAL" "$OUT.tmp"
 mv "$OUT.tmp" "$OUT"
+rm -rf "$RESUME"
 echo "published $OUT after ${TRAIN_SECONDS}s of training"
