@@ -164,7 +164,7 @@
 
 ## 进行中与待决定
 
-- **进行中**：U-Delta-rawFFN+λlr1000 42M（约 9.5 小时）。
+- **进行中**：U-Delta-rawFFN+λlr1000 42M（约 9.5 小时，第 1,000 步验证 loss 4.137，同一步 U-Delta-rawFFN 4.137、Transformer 4.155）；U-Delta-rawFFN+λlr1000 15M 补 seed 1338、1339。
 - **待决定**：记忆完全拿掉的对照（U-Delta-λlr1000 几乎把记忆关掉，记忆还剩多少作用）；42M 的学习率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 补 seed；Transformer 加 NoPE 层作完整上下文的外推对照；U-Delta 的两个归因实验（写入目标去掉 −μk 锚、μ 和记忆用各自的地址）；Transformer 学习率 1e-3；Transformer 和 U-Delta 各跑 2 倍步数。
 
 ## 数据与代码

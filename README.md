@@ -26,6 +26,13 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 - **过了训练长度不会崩**：读到 20K 时完整上下文的 Transformer 升到 6.1–6.3，统一 block 维持在 3.1–3.9（15M 最好的 U-Delta-rawFFN+λlr1000 在 16K–20K 是 3.713，滑动窗口的 Transformer 3.874）；但 42M 时仍比滑动窗口 1,024 的 Transformer 差 0.01–0.03。
 - **重要观察**：U-Delta 系列里，几乎所有格子的内容丢失都来自遗忘门，被新写入覆盖的不到 1%；记忆偏向写意外的 token，但预测到的、模型自己生成的 token 也照写（写入量和 token loss 的 Spearman 相关只有 0.14–0.21）。
 
+### 最新动态（2026-11-13 晚）
+
+- **U-Delta-rawFFN+λlr1000 越读越长越好**：读到 20K 时每一段都是 15M 最好的，16K–20K 3.713（滑动窗口 1,024 的 Transformer 三个 seed 平均 3.893，完整上下文的 Transformer 6.049）。比 U-Delta-rawFFN 的领先从开头的 0.017 增加到 16K–20K 的 0.047。
+- **15M 对 Transformer 的领先越往后越大**：长度 1,024 内从前 64 个 token 的 0.084 增加到 512–1,024 的 0.170。但 15M 的 Transformer 第 128 个 token 之后几乎不再进步，这一点到 42M 消失，所以 42M 才是真正的比较。
+- **42M 训练中**：U-Delta-rawFFN+λlr1000 第 1,000 步验证 loss 4.137，同一步 U-Delta-rawFFN 4.137、Transformer 4.155。这是训练中途的数字；U-Delta-rawFFN 当时也是前段领先、后段被 Transformer 追过，最终输 0.014。
+- **补 seed**：U-Delta-rawFFN+λlr1000 15M 正在补 seed 1338、1339。Transformer 三个 seed 的标准差是 0.016，U-Delta 是 0.003；目前 0.152 的领先远大于这个波动。
+
 实验代码在 `scripts/`（变体注册表 `scripts/variants.py`，U-Delta 系列在 `scripts/delta.py`），结果数据在 `scripts/reports/fineweb/`。依照 `AGENTS.md`，变体在赢之前不进 `model.py`，所以 `model.py` 仍然是 U-Avg。
 
 ## 模型
