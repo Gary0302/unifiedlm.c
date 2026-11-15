@@ -323,13 +323,13 @@ class ReadQueryGateAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
         self.q_down = nn.Linear(args.dim, self.rank, bias=False)
         self.q_up = nn.Parameter(torch.zeros(args.hidden_dim, self.rank))
 
+    def query(self, r, s, u):
+        return _unit(F.relu(_hi(s) + F.linear(F.linear(_hi(u), _hi(self.q_down.weight)), _hi(self.q_up))).square())
+
 
 class ReadQuery128GateAnchorDeltaBlock(ReadQueryGateAnchorDeltaBlock):
     """UD2-gate-q128: UD2-gate-q32 (SDulagq) with the read-address correction at rank 128 instead of 32."""
     rank = 128
-
-    def query(self, r, s, u):
-        return _unit(F.relu(_hi(s) + F.linear(F.linear(_hi(u), _hi(self.q_down.weight)), _hi(self.q_up))).square())
 
 
 class ReadScaleAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
