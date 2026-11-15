@@ -18,6 +18,7 @@
 | 模型 | 15M | 42M | 110M |
 | --- | ---: | ---: | ---: |
 | [Transformer](../variants/transformer.md) | 3.945（3 個 seed，3.928–3.957） | 3.214 | 2.822 |
+| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 3.716 | 3.170 | — |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3.796（3 個 seed，3.793–3.799） | 3.223 | — |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 3.812 | 3.228 | — |
 | [U-Delta](../variants/u-delta.md) | 3.898（3 個 seed，3.895–3.901） | 3.350 | — |
@@ -31,6 +32,7 @@
 | 模型 | 0–64 | 64–128 | 128–256 | 256–512 | 512–1024 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | [Transformer](../variants/transformer.md) | 3.628 | 3.293 | 3.233 | 3.182 | 3.164 |
+| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 3.584 | 3.255 | 3.189 | 3.139 | 3.118 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3.624 | 3.305 | 3.241 | 3.193 | 3.174 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 3.623 | 3.307 | 3.245 | 3.196 | 3.179 |
 | [U-Delta](../variants/u-delta.md) | 3.757 | 3.437 | 3.369 | 3.317 | 3.299 |
@@ -48,15 +50,17 @@
 ## 結論
 
 - **15M 統一 block 贏 Transformer**：U-Delta-rawFFN+λlr1000 3.796（3 個 seed，3.793–3.799） 對 Transformer 3.945（3 個 seed，3.928–3.957），最差的 seed 也比 Transformer 最好的 seed 好 0.128。U-Delta 本身 3.898（3 個 seed，3.895–3.901） 也贏。
-- **42M 打平到略輸，沒有贏**：U-Delta 3.350 輸 0.136，FFN 改讀未歸一化位址的 U-Delta-rawFFN 3.228 輸 0.014，再加遺忘率學快 1,000 倍的 U-Delta-rawFFN+λlr1000 3.223 輸 0.009（各 1 個 seed，比 15M Transformer 的 seed 標準差 0.016 小）。遺忘率學快在 15M 好 0.016，在 42M 只好 0.004。前 64 個 token 還略贏，之後每段輸 0.009–0.012。15M 的領先（U-Delta 0.047、U-Delta-rawFFN 0.133、U-Delta-rawFFN+λlr1000 0.149）到 42M 都沒有了。
+- **42M：UD2-gate-norm-q32-rope 贏 Transformer 0.044（各 1 個 seed）**：3.170 對 3.214，每一段位置都贏 0.038–0.045，前 64 個 token 也贏；長度 4,096 是 3.121（Transformer 過了訓練長度升到 4.871）。比 U-Delta-rawFFN+λlr1000 42M 好 0.054。這個模型是在 15M、同一個 seed 從十個讀出端變體裡挑出來的，要補 seed 才能確定。
+- **U-Delta 系列 42M 打平到略輸**：U-Delta 3.350 輸 0.136，FFN 改讀未歸一化位址的 U-Delta-rawFFN 3.228 輸 0.014，再加遺忘率學快 1,000 倍的 U-Delta-rawFFN+λlr1000 3.223 輸 0.009（各 1 個 seed，比 15M Transformer 的 seed 標準差 0.016 小）。遺忘率學快在 15M 好 0.016，在 42M 只好 0.004。前 64 個 token 還略贏，之後每段輸 0.009–0.012。15M 的領先（U-Delta 0.047、U-Delta-rawFFN 0.133、U-Delta-rawFFN+λlr1000 0.149）到 42M 都沒有了。
 - **15M → 42M 變的是 Transformer**：15M 的 Transformer 從 64–128 段到 512–1,024 段只降 0.064，42M 降 0.129；U-Delta-rawFFN 兩個規模都約 0.12–0.13。15M 越往後贏越多，有一部分是小 Transformer 不太會用前文。
 - **110M 只跑了原版**：U-Avg 2.994 對 Transformer 2.822。U-Delta 系列還沒跑 110M。
 
 ## 注意
 
 - 42M 和 110M 只有 1 個 seed（U-Gate 42M 例外，3 個 seed 3.328–3.333）。
+- UD2-gate-norm-q32-rope 42M 的 hidden_dim 是 1,195（41.77M 參數），其他設定跟 U-Delta-rawFFN+λlr1000 42M 一樣。
 - 學習率沒調，Transformer 在 1e-3 可能更好，還沒試。
 
 ## 涉及的變體
 
-[Transformer](../variants/transformer.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta](../variants/u-delta.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[Split](../variants/split.md)、[U-Avg](../variants/u-avg.md)
+[Transformer](../variants/transformer.md)、[UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta](../variants/u-delta.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[Split](../variants/split.md)、[U-Avg](../variants/u-avg.md)
