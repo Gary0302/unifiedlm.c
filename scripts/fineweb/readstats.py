@@ -1,6 +1,6 @@
 """How strongly does an SD-family block read its memory, by token class and position? Per layer and token: the memory
-read |E^T q| (before any read gate or norm), the read gate (SDulag, SDulagn: o_t = 2 sigmoid(w . h_t + b); SDulas: its
-one scale; else 1), what the memory actually adds to the block output (out: the read after its gate and norm), and the
+read |E^T q| (before any read gate or norm; all heads together for -h4q8, without the mass channel for -mass), the
+read gate (SDulag, SDulagn: o_t = 2 sigmoid(w . h_t + b); SDulas: its one scale; else 1), what the memory actually adds to the block output (out: the read after its gate and norm), and the
 static half |mu z| for scale. Grouped as in tokgap.py by the class of the token the position predicts (bigram /
 seen / new) and by position (0-64, 64-256, 256-1024). Prints JSON and writes readstats.json into --dest. Run from the
 repo root:
@@ -46,7 +46,12 @@ def main():
 
     def hook(*args, **kw):          # called once per layer, in layer order
         o = f(*args, **kw)
-        rec["read"][calls[0] % n].append(o.norm(dim=-1).float().cpu())
+        layer, r = net.layers[calls[0] % n], o
+        if isinstance(layer, delta.MultiHeadReadNormGateAnchorDeltaBlock):   # -h4q8: heads folded into the batch
+            r = o.unflatten(0, (-1, layer.heads)).transpose(1, 2).flatten(-2)
+        elif isinstance(layer, delta.MassQueryGateAnchorDeltaBlock):         # -mass: the last channel is the mass
+            r = o[..., :-1]
+        rec["read"][calls[0] % n].append(r.norm(dim=-1).float().cpu())
         calls[0] += 1
         return o
     delta.delta_memory = hook
