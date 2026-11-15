@@ -2,7 +2,7 @@
 
 **問題**：記憶的讀出怎麼改？
 
-**簡短回答**：讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正都有用，合起來 3.727；每層一個固定縮放沒有用。
+**簡短回答**：讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正都有用，合起來 3.727；每層一個固定縮放沒有用，修正加到秩 128 反而變差。
 
 ## 怎麼做的
 
@@ -22,7 +22,8 @@
 | [UD2-gate](../variants/ud2-gate.md) | 3 | 15.46M | 3.765（3.761–3.767） | 3.722 | 4.120 | 3.720 | 3.685 |
 | [UD2-gate-norm](../variants/ud2-gate-norm.md) | 1 | 15.46M | 3.739 | 3.696 | 4.122 | 3.691 | 3.661 |
 | [UD2-gate-q32](../variants/ud2-gate-q32.md) | 1 | 15.45M | 3.746 | 3.701 | 4.111 | 3.699 | 3.663 |
-| [UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md) | 1 | 15.46M | 3.727 | 3.683 | 4.120 | 3.678 | 還沒跑 |
+| [UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md) | 1 | 15.46M | 3.727 | 3.683 | 4.120 | 3.678 | 3.645 |
+| [UD2-gate-q128](../variants/ud2-gate-q128.md) | 1 | 15.45M | 3.760 | 3.715 | 4.130 | 3.713 | 3.673 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3 | 15.45M | 3.796（3.793–3.799） | 3.753 | 4.154 | 3.751 | 3.713 |
 | [Transformer](../variants/transformer.md) | 3 | 15.19M | 3.945（3.928–3.957） | 5.016 | 4.237 | 3.918 | 6.088 |
 
@@ -48,16 +49,15 @@
 - **讀出門的進步是真的**：UD2-gate 三個 seed 3.766, 3.767, 3.761，平均 3.765，都比 UD2（3.778，1 個 seed）好 0.011–0.017。
 - **不是每層一個縮放就夠**：UD2-scale 3.776，跟 UD2 一樣；學到的縮放都在 0.88–1.04，沒離開 1。UD2-gate 的門每層平均 0.15–1.13，同一層裡不同類別、位置幾乎一樣（第 1 層 0.54–0.59），但它的讀出本身比較大（每層平均 0.38–2.31，UD2-scale 0.25–1.30）。是門跟著輸入變的那一點點有用，還是門讓模型學出更大的讀出再縮小，這次分不開。
 - **讀出 RMSNorm 的進步越後面越大**：UD2-gate-norm 3.739，前 64 個 token +0.003，512–1,024 -0.030（對 UD2-gate）。UD2-gate 記得久的層讀出隨位置變大（第 1 層 0.35 → 0.93），門沒有跟著調。
-- **讀位址修正**：UD2-gate-q32 3.746，格子少 7% 還好 0.021；補最多的是位置 64–256 的新 token（見[逐 token 差距](token-gap.md)）。
-- **兩個一起大約疊加八成**：UD2-gate-norm-q32 3.727，比 UD2-gate 好 0.039（各自 0.028、0.021），是目前 15M 最好的統一 block，贏 Transformer（三個 seed 平均）0.218；前 64 個 token 打平（+0.001），進步都在 64 以後。
+- **讀位址修正**：UD2-gate-q32 3.746，格子少 7% 還好 0.021；補最多的是位置 64–256 的新 token（見[逐 token 差距](token-gap.md)）。修正加到秩 128（UD2-gate-q128，hidden_dim 538）反而是 3.760，比秩 32 差 0.015：秩加大要拿格子換，格子少的代價看起來大過修正多出的容量，但兩者綁在一起分不開。
+- **兩個一起大約疊加八成**：UD2-gate-norm-q32 3.727，比 UD2-gate 好 0.039（各自 0.028、0.021），是目前 15M 最好的統一 block，贏 Transformer（三個 seed 平均）0.218；前 64 個 token 打平（+0.001），進步都在 64 以後。讀到 20K 的 16K–20K 3.645，是 15M 模型裡這段最好的。
 - **都沒有擋掉舊內容的干擾**：截掉遠處前文，新 token 還是變好（見[遠處的前文值多少](reach.md)）。
 
 ## 注意
 
 - 除了 UD2-gate，都只有 1 個 seed（UD2-gate 的 seed 標準差 0.003）。
-- UD2-gate-q32、UD2-gate-norm-q32 的 hidden_dim 降到 662 來對齊參數，記憶格子少 7%。
-- UD2-gate-norm-q32 還沒跑讀到 20K 和診斷。
+- UD2-gate-q32、UD2-gate-norm-q32 的 hidden_dim 降到 662 來對齊參數，記憶格子少 7%；UD2-gate-q128 降到 538，少 24%。
 
 ## 涉及的變體
 
-[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)
+[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)、[UD2-gate-q128](../variants/ud2-gate-q128.md)
