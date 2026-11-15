@@ -1,6 +1,6 @@
 # U-Delta-rawFFN+λlr1000+rawanchor（代號 `SDula`）
 
-**15M 目前最好（1 個 seed）。** U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。
+U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。
 
 - **類別**：主線（統一 block，不含 attention）
 - **基於**：[U-Delta-rawFFN+λlr1000](u-delta-rawffn-lambda-lr1000.md)
@@ -37,11 +37,12 @@ FineWeb-Edu 驗證集，NLL 越低越好；括號裡是 seed 範圍。設定見 
 
 ## 結論
 
-15M（1 個 seed）：NLL 3.778（長度 1,024）、3.736（4,096），比同一個 seed 的 U-Delta-rawFFN+λlr1000（3.793）好 0.015，也低於 U-Delta-rawFFN+λlr1000 三個 seed 最好的那個，U-Delta-rawFFN+λlr1000 的 seed 標準差只有 0.003，所以大概是真的。是目前 15M 最好的統一 block，贏 Transformer（3 個 seed 平均 3.945）0.167。每個位置都好 0.013–0.020（前 64 個 token 4.133 對 4.153，512–1,024 3.734 對 3.748），所以是整體變好，不是記憶的距離變了。按格子平均的記憶長度跟 U-Delta-rawFFN+λlr1000 差不多（12 層裡有 11 層只有 1.1–1.7 個 token，第 1 層 23 個）；按寫入量加權，第 1 層過了 256 個 token 還留 36%（628/712 個格子留超過 1/e），第 9、10 層留 16%、20%，其他層最多 3%。讀到 20K：每一段都比 U-Delta-rawFFN+λlr1000 好 0.013–0.020，16K–20K 3.695（U-Delta-rawFFN+λlr1000 3.713、U-Delta-λlr1000 3.752、滑動窗口的 Transformer 3.874），越讀越遠也沒有縮小。
+15M（1 個 seed）：NLL 3.778（長度 1,024）、3.736（4,096），比同一個 seed 的 U-Delta-rawFFN+λlr1000（3.793）好 0.015，也低於 U-Delta-rawFFN+λlr1000 三個 seed 最好的那個，U-Delta-rawFFN+λlr1000 的 seed 標準差只有 0.003，所以大概是真的。贏 Transformer（3 個 seed 平均 3.945）0.167（之後加讀出門的 U-Delta-rawFFN+λlr1000+rawanchor+readgate 再好 0.012）。每個位置都好 0.013–0.020（前 64 個 token 4.133 對 4.153，512–1,024 3.734 對 3.748），所以是整體變好，不是記憶的距離變了。按格子平均的記憶長度跟 U-Delta-rawFFN+λlr1000 差不多（12 層裡有 11 層只有 1.1–1.7 個 token，第 1 層 23 個）；按寫入量加權，第 1 層過了 256 個 token 還留 36%（628/712 個格子留超過 1/e），第 9、10 層留 16%、20%，其他層最多 3%。讀到 20K：每一段都比 U-Delta-rawFFN+λlr1000 好 0.013–0.020，16K–20K 3.695（U-Delta-rawFFN+λlr1000 3.713、U-Delta-λlr1000 3.752、滑動窗口的 Transformer 3.874），越讀越遠也沒有縮小。
 
 ## 相關實驗
 
 - [長上下文與外推（讀到 20K）](../experiments/extrapolation.md)
+- [逐 token 差距：輸在哪些 token](../experiments/token-gap.md)
 - [遠處的前文值多少](../experiments/reach.md)
 - [每個格子記多久（按寫入量加權）](../experiments/slot-retention.md)
 
