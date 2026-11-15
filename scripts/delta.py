@@ -276,6 +276,29 @@ class AnchorRawFFNDeltaBlock(RawFFNFastRate1000DeltaBlock):
         return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
 
 
+class ReadGateAnchorDeltaBlock(AnchorRawFFNDeltaBlock):
+    """SDulag: SDula with a gate on the memory read, one number per token, o_t = 2 sigmoid(w . h_t + b) in (0, 2), near 1
+    at initialisation (b = 0, w at std 0.02: about 0.65 to 1.35) with dim + 1 parameters per block: the block can turn
+    its read down where the memory holds nothing useful for this token, y = x + mu z + o_t E^T q. Else as in SDula."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.read = nn.Linear(args.dim, 1, bias=True)
+
+    def forward(self, x):
+        h = self.norm(x)
+        u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        s, v = self.key(u), self.val(h)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            z = F.relu(_hi(s)).square()
+            r, v = z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True)), _hi(v)
+            k = F.pad(r[:, :-1], (0, 0, 1, 0))
+            target = v - F.linear(F.pad(z[:, :-1], (0, 0, 1, 0)), _hi(self.mu.weight))
+            beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
+            fast = delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r)) * (2 * torch.sigmoid(_lin(self.read, h)))
+        return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+
 
 class NoMemoryDeltaBlock(RawFFNDeltaBlock):
     """SDn: SDu with the memory removed, the control for what the memory buys: y = x + mu z, z = relu(K u + b)^2 on

@@ -349,6 +349,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDula":  # SDul with the write target anchored at the FFN output it gives, v - mu z_{t-1}
         import delta
         model.UnifiedBlock = delta.AnchorRawFFNDeltaBlock
+    elif variant == "SDulag":  # SDula with a per-token gate on the memory read, 2 sigmoid(w . h + b)
+        import delta
+        model.UnifiedBlock = delta.ReadGateAnchorDeltaBlock
     elif variant == "SDulc":  # SDul with the memory carried across consecutive training windows (gradient stopped)
         import sys
         import delta
