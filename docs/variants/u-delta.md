@@ -32,7 +32,9 @@ FineWeb-Edu 驗證集，NLL 越低越好；括號裡是 seed 範圍。設定見 
 
 讀到 20K（訓練長度 20 倍）的 16K–20K 段：3.816（3 個 seed）。
 
-每層有效記憶長度（遺忘門衰減到 1/e 的 token 數，第 0 → 11 層）：7 / 373 / 315 / 434 / 259 / 23 / 76 / 95 / 86 / 84 / 65 / 314。
+每層有效記憶長度（遺忘門衰減到 1/e 的 token 數，按格子平均，會被快格子拉低，第 0 → 11 層）：7 / 373 / 315 / 434 / 259 / 23 / 76 / 95 / 86 / 84 / 65 / 314。
+
+15M 按寫入量加權、只算衰減，過了 256 個 token 還留下的寫入量（第 0 → 11 層，[每個格子記多久](../experiments/slot-retention.md)）：0% / 51% / 42% / 48% / 35% / 4% / 0% / 1% / 1% / 1% / 1% / 38%。
 
 ## 結論
 
@@ -51,6 +53,8 @@ FineWeb-Edu 驗證集，NLL 越低越好；括號裡是 seed 範圍。設定見 
 - [多 seed 的穩定性](../experiments/seeds.md)
 - [逐 token 差距：輸在哪些 token](../experiments/token-gap.md)
 - [拿掉記憶：記憶值多少、模型多依賴記憶](../experiments/memory-ablation.md)
+- [遠處的前文值多少](../experiments/reach.md)
+- [每個格子記多久（按寫入量加權）](../experiments/slot-retention.md)
 
 ## 重現
 

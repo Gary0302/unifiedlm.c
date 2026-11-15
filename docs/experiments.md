@@ -19,12 +19,14 @@
 | --- | --- | --- |
 | [規模：15M → 42M → 110M](experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 打平到略輸：最好的 U-Delta-rawFFN+λlr1000 輸 0.009（1 個 seed）。 |
 | [逐 token 差距：輸在哪些 token](experiments/token-gap.md) | 統一 block 跟 Transformer 的差距落在哪些 token 上？ | 15M 贏的近九成是照抄前文；42M 輸的全是窗口裡沒出現過的新 token。 |
+| [遠處的前文值多少](experiments/reach.md) | 把前文截到最近 128 或 512 個 token，會差多少？42M 輸在新 token 是因為遠距記憶嗎？ | 不是：約七成的差距在最近 128 個 token 內就有；遠處前文主要用來照抄，記憶模型的新 token 還會被舊內容干擾。 |
 | [多 seed 的穩定性](experiments/seeds.md) | 差距是不是 seed 的噪聲？ | 統一 block 的 seed 標準差約 0.003，Transformer 約 0.016；最新的統一 block 三個 seed 都贏。 |
 | [統一的對照：共享位址 vs 分開位址](experiments/unification.md) | 同一組格子同時當 FFN 和記憶，會不會比分開差？ | 原版上分開的好 0.074，但多 16% 參數；U-Delta 上還沒做。 |
 | [記憶的寫法：平均、遺忘門、delta rule](experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |
 | [FFN 那一半讀哪個位址](experiments/ffn-address.md) | U-Delta 到 42M 為什麼輸 Transformer？ | FFN 讀歸一化位址是瓶頸；改讀 relu² 後 15M 好 0.086、42M 好 0.122。 |
 | [記憶設計：快記憶、慢記憶、遺忘率](experiments/memory-design.md) | 需要慢記憶嗎？遺忘率怎麼設？ | 不需要慢記憶；記憶越短越好，短到上限還在變好。 |
 | [拿掉記憶：記憶值多少、模型多依賴記憶](experiments/memory-ablation.md) | 沒有記憶會差多少？推理時關掉記憶會怎樣？哪一層最重要？ | 記憶真正值 0.58（沒有記憶、從頭訓練的版本 4.388）；推理時關掉記憶 NLL 升 1.5–2.0，按位置變平：讀前文全靠記憶。 |
+| [每個格子記多久（按寫入量加權）](experiments/slot-retention.md) | 遺忘門的“有效記憶長度”只有 1–2 個 token，記憶真的這麼短嗎？ | 不是：按寫入量加權，U-Delta-rawFFN+λlr1000 有 3 層（42M 有 5 層）過了 256 個 token 還留 20–50%。 |
 | [內容是被遺忘還是被覆寫](experiments/forgetting-vs-overwrite.md) | 格子丟掉內容，是衰減還是被新寫入覆蓋？ | 典型格子是衰減（覆寫不到 1%）；少數常被寫的格子覆寫較重。 |
 | [寫入量與 loss](experiments/write-vs-loss.md) | 記憶是不是只寫沒預測到的 token？ | 只是偏向，相關 0.14–0.21；自己預測到的也照寫。 |
 | [位址尖銳度](experiments/sharpness.md) | 位址更尖（更大的次方）會不會更好？ | 不會：可學的次方停在 2.0–2.35，NLL 不變。 |
@@ -52,7 +54,7 @@
 | [U-Delta-rawFFN+λlr1000+carry](variants/u-delta-rawffn-lambda-lr1000-carry.md) | `SDulc` | U-Delta-rawFFN+λlr1000 訓練時記憶跨窗口接續：每個窗口從同一串上一個窗口結束的記憶開始（梯度不跨窗口），評測照舊從空記憶開始。 | 3.815 |
 | [U-Delta-λlr10](variants/u-delta-lambda-lr10.md) | `SDl` | U-Delta 的每格基礎遺忘率 `log_rate` 有效學習率 ×10（重參數化，起點不變）。 | 3.887 |
 | [U-Delta-λlr100](variants/u-delta-lambda-lr100.md) | `SDl100` | U-Delta 的 `log_rate` 有效學習率 ×100。 | 3.851 |
-| [U-Delta-λlr1000](variants/u-delta-lambda-lr1000.md) | `SDl1000` | U-Delta 的 `log_rate` 有效學習率 ×1000：幾乎每層都把記憶縮到上限（約 1 個 token）。 | 3.843 |
+| [U-Delta-λlr1000](variants/u-delta-lambda-lr1000.md) | `SDl1000` | U-Delta 的 `log_rate` 有效學習率 ×1000：按格子平均，幾乎每層都把記憶縮到上限（約 1 個 token）。 | 3.843 |
 | [U-Delta-spreadλ](variants/u-delta-spread-lambda.md) | `SDw` | U-Delta 的遺忘率初始值分散在 1/(L/4)～1/(16L)：同一份記憶裡有快有慢。 | 3.890 |
 | [U-Delta-diverseλ](variants/u-delta-diverse-lambda.md) | `SDv` | U-Delta 的基礎記憶長度從 4 到 65,536 個 token 分散，門最多只能讓遺忘快 2 倍，所以慢格子留得住。 | 3.877 |
 | [U-Delta-docreset](variants/u-delta-docreset.md) | `SDb` | U-Delta 遇到文件開頭（BOS）就清空記憶。 | 3.890 |
