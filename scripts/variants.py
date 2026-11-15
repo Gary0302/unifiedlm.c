@@ -364,6 +364,12 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDulagnq":  # SDulagq with SDulagn's normalised read: both read changes together
         import delta
         model.UnifiedBlock = delta.ReadNormQueryGateAnchorDeltaBlock
+    elif variant == "UD2-gate-q128":  # SDulagq (UD2-gate-q32) with the read-address correction at rank 128
+        import delta
+        model.UnifiedBlock = delta.ReadQuery128GateAnchorDeltaBlock
+    elif variant == "UD2-gate-norm-q32-rope":  # SDulagnq (UD2-gate-norm-q32) with rotary relative position in half the memory
+        import delta
+        model.UnifiedBlock = delta.RopeReadNormQueryGateAnchorDeltaBlock
     elif variant == "SDulc":  # SDul with the memory carried across consecutive training windows (gradient stopped)
         import sys
         import delta
