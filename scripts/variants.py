@@ -343,6 +343,23 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDul":  # SDu with SDl1000's 1000x learning rate on log_rate
         import delta
         model.UnifiedBlock = delta.RawFFNFastRate1000DeltaBlock
+    elif variant == "SDn":  # control: SDu with the memory removed (FFN on the conv output only)
+        import delta
+        model.UnifiedBlock = delta.NoMemoryDeltaBlock
+    elif variant == "SDula":  # SDul with the write target anchored at the FFN output it gives, v - mu z_{t-1}
+        import delta
+        model.UnifiedBlock = delta.AnchorRawFFNDeltaBlock
+    elif variant == "SDulc":  # SDul with the memory carried across consecutive training windows (gradient stopped)
+        import sys
+        import delta
+        import fineweb
+        flags = dict(a[2:].split("=", 1) for a in sys.argv[1:] if a.startswith("--") and "=" in a)
+        if "batch_size" in flags and "gradient_accumulation_steps" in flags:   # training; evaluation needs neither
+            delta.CARRY["batch"] = int(flags["batch_size"])
+            delta.CARRY["accum"] = int(flags["gradient_accumulation_steps"])
+            fineweb.PretokDataset.__iter__ = delta.carry_stream(fineweb.PretokDataset.__iter__)
+        i = itertools.count()
+        model.UnifiedBlock = lambda args: delta.CarryRawFFNDeltaBlock(args, first=next(i) == 0)
     elif variant == "SDb":  # SD with the memory emptied at every BOS
         import delta
         model.UnifiedBlock = delta.DocResetDeltaBlock

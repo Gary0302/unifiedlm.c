@@ -32,12 +32,13 @@ from gated import CHUNK, GatedBlock
 from model import _hi
 
 
-def delta_memory(k, u, beta, logl, q, chunk=CHUNK, reset=None):
+def delta_memory(k, u, beta, logl, q, chunk=CHUNK, reset=None, E0=None, final=False):
     """k: (B,T,m) unit write keys, u: (B,T,d) write targets, beta: (B,T) in [0, 1], logl: (B,T,m) log decay applied
     at step t (in [-1, 0]), q: (B,T,m) read addresses. With E_0 = 0,
         E_t = (I - beta_t k_t k_t^T) diag(lam_t) E_{t-1} + beta_t k_t u_t^T,   o_t = E_t^T q_t.
     Equivalently E_t = diag(lam_t) E_{t-1} + k_t delta_t^T with delta_t = beta_t (u_t - E_{t-1}^T diag(lam_t) k_t).
-    reset (B,T) bool, SDb: lam_t = 0 where set (E_{t-1} is dropped), by masking the terms that cross a reset."""
+    reset (B,T) bool, SDb: lam_t = 0 where set (E_{t-1} is dropped), by masking the terms that cross a reset.
+    E0 (B,m,d), SDulc: the state entering step 0 instead of 0; final=True also returns E_T."""
     B, T, m = k.shape
     d = u.size(-1)
     pad = (-T) % chunk
@@ -70,13 +71,14 @@ def delta_memory(k, u, beta, logl, q, chunk=CHUNK, reset=None):
     M = torch.linalg.solve_triangular(eye + A, eye.expand_as(A), upper=False, unitriangular=True)
     W = M * bc[:, :, None, :]                 # (I + A)^-1 diag(beta): delta = W (U - KD E_0)
     PU, PK = W @ uc, W @ kd0
-    E = k.new_zeros(B, m, d)
+    E = k.new_zeros(B, m, d) if E0 is None else E0.to(k.dtype)
     out = []
     for n in range(N):
         delta = PU[:, n] - PK[:, n] @ E
         out.append(qd[:, n] @ E + Q[:, n] @ delta)
         E = el[:, n, :, None] * E + ks[:, n].transpose(-1, -2) @ delta
-    return torch.stack(out, 1).reshape(B, N * chunk, d)[:, :T]
+    o = torch.stack(out, 1).reshape(B, N * chunk, d)[:, :T]
+    return (o, E) if final else o
 
 
 def _lin(layer, h):
@@ -253,6 +255,115 @@ class RawFFNDeltaBlock(DeltaBlock):
 
 class RawFFNFastRate1000DeltaBlock(RawFFNDeltaBlock, FastRate1000DeltaBlock):
     """SDul: SDu (static half on the unnormalized code) with SDl1000's log_rate learning 1000x as fast."""
+
+
+
+class AnchorRawFFNDeltaBlock(RawFFNFastRate1000DeltaBlock):
+    """SDula: SDul whose write target is anchored at the FFN output the block actually gives, v - mu z_{t-1}, instead
+    of SDu's v - mu r_{t-1} (z = relu(K u + b)^2, r = z / (eps + sum z)); everything else as in SDul."""
+
+    def forward(self, x):
+        h = self.norm(x)
+        u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        s, v = self.key(u), self.val(h)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            z = F.relu(_hi(s)).square()
+            r, v = z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True)), _hi(v)
+            k = F.pad(r[:, :-1], (0, 0, 1, 0))
+            target = v - F.linear(F.pad(z[:, :-1], (0, 0, 1, 0)), _hi(self.mu.weight))
+            beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
+            fast = delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r))
+        return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+
+
+class NoMemoryDeltaBlock(RawFFNDeltaBlock):
+    """SDn: SDu with the memory removed, the control for what the memory buys: y = x + mu z, z = relu(K u + b)^2 on
+    the conv output. The memory's parameters (val, beta, the gate, log_rate, log_eps) are dropped."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        del self.val, self.beta, self.gate_q, self.gate_p, self.log_rate, self.log_eps
+
+    def forward(self, x):
+        h = self.norm(x)
+        u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        s = self.key(u)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            z = F.relu(_hi(s)).square()
+        return x + self.dropout(self.mu(z.type_as(x)))
+
+CARRY = {"calls": 0, "accum": 1}   # SDulc: training forwards so far, micro-batches per optimizer step
+
+
+class CarryRawFFNDeltaBlock(RawFFNFastRate1000DeltaBlock):
+    """SDulc: SDul whose memory, in training, starts each window from the state the same batch row ended its previous
+    window with (gradient stopped), so the memory sees a stream longer than L. The rows read consecutive windows of one
+    stream each (carry_stream); micro-batch j of a step continues micro-batch j of the step before, so a block keeps one
+    state per micro-batch. The first block counts the training forwards. Evaluation starts every window empty, as in
+    SDul. The conv still starts each window with zeros."""
+
+    def __init__(self, args, first=False):
+        super().__init__(args)
+        self.first = first
+        self.carry = {}
+
+    def forward(self, x):
+        if not self.training:
+            return super().forward(x)
+        if self.first:
+            CARRY["calls"] += 1
+        j = (CARRY["calls"] - 1) % CARRY["accum"]
+        h = self.norm(x)
+        u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        s, v = self.key(u), self.val(h)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            z = F.relu(_hi(s)).square()
+            r, v = z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True)), _hi(v)
+            k = F.pad(r[:, :-1], (0, 0, 1, 0))
+            target = v - F.linear(k, _hi(self.mu.weight))
+            beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
+            fast, E = delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r), E0=self.carry.get(j), final=True)
+            self.carry[j] = E.detach()
+        return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+
+def carry_stream(orig):
+    """PretokDataset.__iter__ for SDulc: the training split (shards end to end) cut into A * B equal stretches, one
+    stream of consecutive windows each (B the batch size, A the micro-batches per step). Sample n goes to row n % B of
+    micro-batch (n // B) % A of step n // (A B) and is window `step` of stream (micro-batch, row). The validation
+    split is unchanged."""
+    import bisect
+    import glob
+    import os
+    import numpy as np
+    import fineweb
+
+    def it(self):
+        if self.split != "train":
+            yield from orig(self)
+            return
+        B, A, L = CARRY["batch"], CARRY["accum"], self.max_seq_len
+        ms = [np.memmap(f, dtype=np.uint16, mode="r") for f in sorted(glob.glob(os.path.join(fineweb.DATA_DIR, "*.bin")))[:-1]]
+        ends = np.cumsum([len(m) for m in ms]).tolist()
+        R = ends[-1] // (A * B)        # tokens per stream
+        W = (R - 1) // L               # windows per stream before it wraps
+
+        def read(p, n):
+            i = bisect.bisect_right(ends, p)
+            a = p - (ends[i - 1] if i else 0)
+            c = ms[i][a:a + n]
+            return c if len(c) == n else np.concatenate([c, ms[i + 1][:n - len(c)]])
+
+        n = 0
+        while True:
+            b, row = divmod(n, B)
+            step, j = divmod(b, A)
+            p = (j * B + row) * R + (step % W) * L
+            chunk = torch.from_numpy(read(p, L + 1).astype(np.int64))
+            yield chunk[:-1], chunk[1:]
+            n += 1
+    return it
 
 
 BOS = 1   # llama2 tokenizer: every document starts with BOS
