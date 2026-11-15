@@ -72,12 +72,22 @@
 | 新 | 46,487 | 5.435 | 5.420 | 5.405 | 5.409 | +0.011 | -0.016 | -0.010 | -0.014 |
 | 新，頻率前 100 | 5,433 | 3.240 | 3.264 | 3.254 | 3.248 | -0.008 | -0.032 | -0.034 | -0.034 |
 
+### 15M 讀出 RMSNorm 加讀位址修正、秩 128，截到最近 65–128 個 token（位置 ≥ 128）
+
+| token 類別 | token 數 | Transformer 完整 | UD2-gate-q32 完整 | UD2-gate-norm-q32 完整 | UD2-gate-q128 完整 | Transformer 遠處的價值 | UD2-gate-q32 遠處的價值 | UD2-gate-norm-q32 遠處的價值 | UD2-gate-q128 遠處的價值 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 全部 | 114,688 | 3.869 | 3.683 | 3.662 | 3.699 | +0.077 | +0.136 | +0.142 | +0.139 |
+| 二元組重複 | 24,801 | 2.035 | 1.411 | 1.397 | 1.423 | +0.268 | +0.552 | +0.551 | +0.556 |
+| 見過 | 43,400 | 3.240 | 3.134 | 3.095 | 3.146 | +0.039 | +0.058 | +0.066 | +0.060 |
+| 新 | 46,487 | 5.435 | 5.409 | 5.401 | 5.429 | +0.011 | -0.014 | -0.004 | -0.009 |
+| 新，頻率前 100 | 5,433 | 3.240 | 3.248 | 3.238 | 3.259 | -0.008 | -0.034 | -0.029 | -0.023 |
+
 ## 結論
 
 - **遠處的前文主要用來照抄**：42M 截到最近 65–128 個 token，全部 token 平均變差 0.142–0.146，幾乎都來自二元組重複的 token（每個 +0.493 到 +0.499）；三個模型從遠處拿到的差不多。
 - **42M 輸在新 token 的差距約七成在最近 128 個 token 內就有**：U-Delta-rawFFN+λlr1000 − Transformer 完整前文 +0.022，截到 65–128 後 +0.016（71.7%）。Transformer 從 128 以外的新 token 拿到 0.014，U-Delta-rawFFN+λlr1000 0.007，U-Delta-rawFFN 0.004。位置 ≥ 512 截到 257–512，所有模型從更遠處拿到的都 ≤ 0（Transformer -0.004，U-Delta-rawFFN+λlr1000 -0.006）。所以剩下的差距不是遠距記憶，是在最近 128 個 token 內用前文猜新詞。
 - **記憶模型的新 token 會被舊內容干擾**：15M 截到 65–128 後，所有記憶模型的新 token 都變好（U-Delta -0.010、U-Delta+slow -0.015、U-Delta-diverseλ -0.020、U-Delta-rawFFN+λlr1000 -0.010、UD2 -0.013），Transformer 變差（+0.011）；保留慢記憶的 U-Delta+slow、U-Delta-diverseλ 變得最多。42M 頻率前 100 的新 token 連 Transformer 也變好（-0.010），U-Delta-rawFFN+λlr1000 -0.018、U-Delta-rawFFN -0.028。
-- **讀出端的修改都沒有擋掉干擾**：截到 65–128 後新 token 還是變好：UD2 -0.013、UD2-scale -0.013、UD2-gate -0.016、UD2-gate-norm -0.010、UD2-gate-q32 -0.014（Transformer +0.011）。這些修改整體都更好，但不是因為干擾變少。位置 ≥ 128、頻率前 100 的新 token，UD2-gate 比 Transformer 差 0.024，UD2 打平（差 0.001）。
+- **讀出端的修改都沒有擋掉干擾**：截到 65–128 後新 token 還是變好：UD2 -0.013、UD2-scale -0.013、UD2-gate -0.016、UD2-gate-norm -0.010、UD2-gate-q32 -0.014、UD2-gate-q128 -0.009、UD2-gate-norm-q32 -0.004（Transformer +0.011）；兩個一起的 UD2-gate-norm-q32 最小，但還沒變成正的。這些修改整體都更好，但不是因為干擾變少。位置 ≥ 128、頻率前 100 的新 token，UD2-gate 比 Transformer 差 0.024，UD2 打平（差 0.001）。
 
 ## 注意
 
@@ -87,4 +97,4 @@
 
 ## 涉及的變體
 
-[Transformer](../variants/transformer.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-diverseλ](../variants/u-delta-diverse-lambda.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)
+[Transformer](../variants/transformer.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-diverseλ](../variants/u-delta-diverse-lambda.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)、[UD2-gate-q128](../variants/ud2-gate-q128.md)

@@ -89,10 +89,29 @@
 | 頻率 1K–10K | 28.5% | 5.789 | -0.322 | -0.338 | -0.292 | 51.8% |
 | 頻率 10K 以後 | 3.3% | 8.003 | -0.624 | -0.651 | -0.531 | 11.7% |
 
+### 15M 讀出 RMSNorm 加讀位址修正、秩 128（減 Transformer 15M，seed 1337）
+
+| token 類別 | 占比 | Transformer NLL | UD2-gate-norm-q32 − Transformer | UD2-gate-q32 − Transformer | UD2-gate-q128 − Transformer | UD2-gate-norm-q32 差距的占比 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 全部 | 100.0% | 3.893 | -0.197 | -0.177 | -0.161 | 100% |
+| 二元組重複 | 19.9% | 2.017 | -0.637 | -0.621 | -0.610 | 64.5% |
+| 見過 | 36.0% | 3.189 | -0.145 | -0.106 | -0.093 | 26.5% |
+| 新 | 44.1% | 5.317 | -0.040 | -0.035 | -0.013 | 9.0% |
+| 頻率前 100 | 43.3% | 2.167 | -0.063 | -0.053 | -0.046 | 13.8% |
+| 頻率 100–1K | 24.8% | 4.178 | -0.170 | -0.168 | -0.146 | 21.5% |
+| 頻率 1K–10K | 28.5% | 5.789 | -0.367 | -0.322 | -0.299 | 53.2% |
+| 頻率 10K 以後 | 3.3% | 8.003 | -0.680 | -0.624 | -0.582 | 11.5% |
+
 ### 15M 讀出端的變體，按位置
 
 | 模型 | 類別 | 0–64 | 64–256 | 256–1,024 |
 | --- | --- | ---: | ---: | ---: |
+| UD2-gate-norm-q32（15M） | 二元組重複 | -0.579 | -0.602 | -0.643 |
+| UD2-gate-norm-q32（15M） | 見過 | -0.092 | -0.153 | -0.145 |
+| UD2-gate-norm-q32（15M） | 新 | -0.089 | -0.039 | -0.032 |
+| UD2-gate-q128（15M） | 二元組重複 | -0.535 | -0.567 | -0.619 |
+| UD2-gate-q128（15M） | 見過 | -0.034 | -0.092 | -0.095 |
+| UD2-gate-q128（15M） | 新 | -0.067 | -0.006 | -0.006 |
 | UD2-gate-q32（15M） | 二元組重複 | -0.524 | -0.572 | -0.630 |
 | UD2-gate-q32（15M） | 見過 | -0.064 | -0.110 | -0.106 |
 | UD2-gate-q32（15M） | 新 | -0.096 | -0.029 | -0.027 |
@@ -114,7 +133,7 @@
 - **按頻率**：42M 輸在最常見的前 100 個 token（占 43.3%，+0.014），1K 以後的少見 token 略贏；15M 每一組都贏，越少見贏越多（10K 以後 -0.540）。
 - **15M 新 token 的差距靠 FFN 讀未歸一化的位址補上，不是靠記憶設計**：64–256 的新 token，U-Delta +0.169，保留慢記憶的 U-Delta+slow +0.155、U-Delta-diverseλ +0.141、U-Delta-spreadλ +0.157，記憶短的 U-Delta-λlr1000 +0.114；U-Delta-λlr1000 再讓 FFN 讀未歸一化的位址（= U-Delta-rawFFN+λlr1000）降到 +0.022，UD2 -0.010。含 attention 的 U-Delta+attn +0.108，對 0–64 和 64–256 補的量差不多。
 - **讀出端的修改多贏在照抄、見過的 token 和 64 以後的新 token**：對 Transformer，UD2 -0.148，UD2-gate -0.156，UD2-gate-norm -0.182，UD2-gate-q32 -0.177；UD2-scale -0.145 跟 UD2 一樣。UD2-gate-norm 多出來的一半以上在見過的 token（-0.118，UD2-gate -0.079）。
-- **讀位址修正補最多的是位置 64–256 的新 token**：UD2-gate-q32 -0.029，UD2-gate-norm -0.022，UD2-gate -0.010。符合“共享的位址只能找相似、不能找相關”的推測，但不改位址的 UD2-gate-norm 也補了一大半，還不能說都是位址的功勞。
+- **讀位址修正補最多的是位置 64–256 的新 token**：UD2-gate-q32 -0.029，UD2-gate-norm -0.022，UD2-gate -0.010。符合“共享的位址只能找相似、不能找相關”的推測，但不改位址的 UD2-gate-norm 也補了一大半，還不能說都是位址的功勞。兩個一起的 UD2-gate-norm-q32 -0.039，每一類都領先（全部 -0.197）；修正加到秩 128 的 UD2-gate-q128 只剩 -0.006，每一類都比秩 32 差。
 - 推測（還沒驗證）：統一 block 的記憶按位址取回存過的值，照抄已經追平或更好；輸的是拿整段前文來猜還沒出現過的詞，這需要按內容綜合整段上下文，是 attention 擅長的。
 
 ## 注意
@@ -125,4 +144,4 @@
 
 ## 涉及的變體
 
-[Transformer](../variants/transformer.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-diverseλ](../variants/u-delta-diverse-lambda.md)、[U-Delta-spreadλ](../variants/u-delta-spread-lambda.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)、[UD2](../variants/ud2.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)
+[Transformer](../variants/transformer.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-diverseλ](../variants/u-delta-diverse-lambda.md)、[U-Delta-spreadλ](../variants/u-delta-spread-lambda.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)、[UD2](../variants/ud2.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)、[UD2-gate-q128](../variants/ud2-gate-q128.md)
