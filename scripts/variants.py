@@ -373,6 +373,12 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "UD2-gate-norm-q128-rope":  # UD2-gate-norm-q32-rope with the read-address correction at rank 128
         import delta
         model.UnifiedBlock = delta.RopeReadNormQuery128GateAnchorDeltaBlock
+    elif variant == "UD2-gate-norm-h4q8":  # UD2-gate-norm-q32 with the read split into 4 heads of rank 8 (same parameters)
+        import delta
+        model.UnifiedBlock = delta.MultiHeadReadNormGateAnchorDeltaBlock
+    elif variant == "UD2-gate-mass-q32":  # UD2-gate-q32 with the read divided by the stored mass its address hits
+        import delta
+        model.UnifiedBlock = delta.MassQueryGateAnchorDeltaBlock
     elif variant == "SDulc":  # SDul with the memory carried across consecutive training windows (gradient stopped)
         import sys
         import delta

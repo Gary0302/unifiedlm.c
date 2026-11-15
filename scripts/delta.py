@@ -395,6 +395,52 @@ class RopeReadNormQueryGateAnchorDeltaBlock(RopeMemoryMixin, ReadNormQueryGateAn
     """UD2-gate-norm-q32-rope: UD2-gate-norm-q32 (SDulagnq) with rotary relative position on half its memory slots."""
 
 
+class MultiHeadReadNormGateAnchorDeltaBlock(ReadNormGateAnchorDeltaBlock):
+    """UD2-gate-norm-h4q8: UD2-gate-norm-q32 with its read split into heads. The value width is split into `heads`
+    groups and each head reads its group with an address of its own, q_h = unit(relu(K u + b + U_h V_h u)^2) at rank
+    `rank` (heads x rank = 32: the parameters of UD2-gate-norm-q32 exactly), so the heads can look up different slots
+    at once. The write is the same delta rule for every head (one key, beta and decay), so the state is the same size;
+    each head's read is RMS-normalised on its own before the gain and the gate. U_h start at 0."""
+    heads, rank = 4, 8
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.q_down = nn.Linear(args.dim, self.heads * self.rank, bias=False)
+        self.q_up = nn.Parameter(torch.zeros(self.heads, args.hidden_dim, self.rank))
+
+    def query(self, r, s, u):
+        d = F.linear(_hi(u), _hi(self.q_down.weight)).unflatten(-1, (self.heads, self.rank))
+        return _unit(F.relu(_hi(s)[:, :, None] + torch.einsum("bthr,hmr->bthm", d, _hi(self.q_up))).square())
+
+    def memory(self, k, target, beta, logl, q):     # q (B, T, heads, m); heads folded into the batch, one call
+        B, H = k.size(0), self.heads
+        fold = lambda x: x[:, None].expand(B, H, *x.shape[1:]).flatten(0, 1)
+        o = delta_memory(fold(k), target.unflatten(-1, (H, -1)).transpose(1, 2).flatten(0, 1), fold(beta), fold(logl),
+                         q.transpose(1, 2).flatten(0, 1))
+        return o.unflatten(0, (B, H)).transpose(1, 2).flatten(-2)
+
+    def read_out(self, o, h):
+        o = o.unflatten(-1, (self.heads, -1))
+        o = (o * torch.rsqrt(o.square().mean(-1, keepdim=True) + self.read_norm.eps)).flatten(-2) * self.read_norm.weight
+        return ReadGateAnchorDeltaBlock.read_out(self, o, h)
+
+
+class MassQueryGateAnchorDeltaBlock(ReadQueryGateAnchorDeltaBlock):
+    """UD2-gate-mass-q32: UD2-gate-q32 with the read divided by how much stored content its address hits, the role of
+    softmax's denominator: a constant value 1 is written with every token through the same delta rule, so its read
+    m_t = q_t . f_t measures the filled slots the address covers (f_a near 1 for a slot written lately, decaying with
+    it), and y = E^T q / (tau + m_t): a weighted average of what the address finds when it finds much, small when it
+    finds little, so many weak matches no longer add up. tau = softplus(learned), 1 at initialisation."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.mass_tau = nn.Parameter(torch.tensor(math.log(math.e - 1)))
+
+    def memory(self, k, target, beta, logl, q):
+        o = delta_memory(k, torch.cat([target, torch.ones_like(target[..., :1])], -1), beta, logl, q)
+        return o[..., :-1] / (F.softplus(self.mass_tau.float()) + o[..., -1:].clamp_min(0))
+
+
 class RopeReadNormQuery128GateAnchorDeltaBlock(RopeMemoryMixin, ReadQuery128GateAnchorDeltaBlock, ReadNormGateAnchorDeltaBlock):
     """UD2-gate-norm-q128-rope: all three read changes, the normalised read, the rank-128 read-address correction and
     rotary relative position on half the memory slots."""
