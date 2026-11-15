@@ -29,7 +29,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from gated import CHUNK, GatedBlock
-from model import _hi
+from model import RMSNorm, _hi
 
 
 def delta_memory(k, u, beta, logl, q, chunk=CHUNK, reset=None, E0=None, final=False):
@@ -295,8 +295,39 @@ class ReadGateAnchorDeltaBlock(AnchorRawFFNDeltaBlock):
             k = F.pad(r[:, :-1], (0, 0, 1, 0))
             target = v - F.linear(F.pad(z[:, :-1], (0, 0, 1, 0)), _hi(self.mu.weight))
             beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
-            fast = delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r)) * (2 * torch.sigmoid(_lin(self.read, h)))
+            fast = self.read_out(delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r)), h)
         return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+    def read_out(self, o, h):
+        return o * (2 * torch.sigmoid(_lin(self.read, h)))
+
+
+class ReadScaleAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
+    """SDulas: the control for SDulag, one learned read scale per block, 2 sigmoid(b) (1 at initialisation), in place of
+    the per-token gate: SDulag's gate came out nearly the same on every token of a layer (readstats.py)."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        del self.read
+        self.read_b = nn.Parameter(torch.zeros(()))
+
+    def read_out(self, o, h):
+        return o * (2 * torch.sigmoid(self.read_b.float()))
+
+
+class ReadNormGateAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
+    """SDulagn: SDulag with the read RMS-normalised before the gate, o_t RMSNorm(E^T q), as GatedDeltaNet does: the read
+    no longer grows as the memory fills (readstats.py: |E^T q| rises with position in the long-memory layers), and its
+    size is left to the gate. The per-channel gain starts at 1 / sqrt(dim), so the read starts at norm 1."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.read_norm = RMSNorm(args.dim, args.norm_eps)
+        with torch.no_grad():
+            self.read_norm.weight.fill_(args.dim ** -0.5)
+
+    def read_out(self, o, h):
+        return super().read_out(self.read_norm(o), h)
 
 
 

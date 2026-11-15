@@ -352,6 +352,12 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDulag":  # SDula with a per-token gate on the memory read, 2 sigmoid(w . h + b)
         import delta
         model.UnifiedBlock = delta.ReadGateAnchorDeltaBlock
+    elif variant == "SDulas":  # control for SDulag: one learned read scale per block instead of a per-token gate
+        import delta
+        model.UnifiedBlock = delta.ReadScaleAnchorDeltaBlock
+    elif variant == "SDulagn":  # SDulag with the memory read RMS-normalised before the gate (GatedDeltaNet's output norm)
+        import delta
+        model.UnifiedBlock = delta.ReadNormGateAnchorDeltaBlock
     elif variant == "SDulc":  # SDul with the memory carried across consecutive training windows (gradient stopped)
         import sys
         import delta
