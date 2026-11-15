@@ -40,7 +40,7 @@ FineWeb-Edu 驗證集，NLL 越低越好；括號裡是 seed 範圍。設定見 
 
 ## 相關實驗
 
-- [讀出端：門、縮放、RMSNorm、讀位址修正](../experiments/read-side.md)
+- [讀出端：門、縮放、RMSNorm、讀位址修正、旋轉相對位置](../experiments/read-side.md)
 - [長上下文與外推（讀到 20K）](../experiments/extrapolation.md)
 - [逐 token 差距：輸在哪些 token](../experiments/token-gap.md)
 - [遠處的前文值多少](../experiments/reach.md)
