@@ -395,6 +395,11 @@ class RopeReadNormQueryGateAnchorDeltaBlock(RopeMemoryMixin, ReadNormQueryGateAn
     """UD2-gate-norm-q32-rope: UD2-gate-norm-q32 (SDulagnq) with rotary relative position on half its memory slots."""
 
 
+class RopeReadNormQuery128GateAnchorDeltaBlock(RopeMemoryMixin, ReadQuery128GateAnchorDeltaBlock, ReadNormGateAnchorDeltaBlock):
+    """UD2-gate-norm-q128-rope: all three read changes, the normalised read, the rank-128 read-address correction and
+    rotary relative position on half the memory slots."""
+
+
 
 class NoMemoryDeltaBlock(RawFFNDeltaBlock):
     """SDn: SDu with the memory removed, the control for what the memory buys: y = x + mu z, z = relu(K u + b)^2 on
