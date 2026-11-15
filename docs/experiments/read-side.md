@@ -1,14 +1,15 @@
-# 讀出端：門、縮放、RMSNorm、讀位址修正
+# 讀出端：門、縮放、RMSNorm、讀位址修正、旋轉相對位置
 
 **問題**：記憶的讀出怎麼改？
 
-**簡短回答**：讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正都有用，合起來 3.727；每層一個固定縮放沒有用，修正加到秩 128 反而變差。
+**簡短回答**：讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正、記憶裡的旋轉相對位置都有用，合起來 3.716；每層固定縮放、秩 128、多 head、除以記憶量都沒用。
 
 ## 怎麼做的
 
 - UD2（`SDula`）每個 token 把記憶讀出 E_tᵀ q_t 全額加上：y = x + μ z_t + E_tᵀ q_t。這組只改讀出端，寫入不變；各 15M、同一個 seed（1337），UD2-gate 補到 3 個 seed。
 - UD2-scale：讀出乘上每層一個可學的純量 2·sigmoid(b)（起點 1）。UD2-gate：乘上每個 token 一個門 o_t = 2·sigmoid(w·h_t + b)。UD2-gate-norm：讀出先 RMSNorm 再過門（GDN 的做法）。
 - UD2-gate-q32：讀位址自己多一個秩 32 的修正，q_t = unit(relu(K u_t + b + U V u_t)²)，寫入鑰匙不變，所以比對不再是同一個位址跟自己比；hidden_dim 降到 662 對齊參數。UD2-gate-norm-q32：兩個一起。
+- UD2-gate-norm-q32-rope：再把一半格子兩兩成對旋轉，寫入鑰匙按寫入的位置、讀位址按讀的位置轉（週期 4–256 個 token），這些格子的比對只看相對距離，同一對共用衰減；不加參數。UD2-gate-norm-q128-rope：同樣加旋轉，修正用秩 128（hidden_dim 538）。UD2-gate-norm-h4q8：UD2-gate-norm-q32 的讀出拆成 4 個 head，每個 head 有自己秩 8 的修正。UD2-gate-mass-q32：UD2-gate-q32 的讀出除以位址碰到的記憶量。
 - 讀出大小：`scripts/fineweb/readstats.py`，32 個長 1,024 的窗口，每層的 |E_tᵀ q_t| 和門的平均，按 token 類別（照抄、見過、新）和位置分組。
 
 ## 結果
@@ -24,6 +25,10 @@
 | [UD2-gate-q32](../variants/ud2-gate-q32.md) | 1 | 15.45M | 3.746 | 3.701 | 4.111 | 3.699 | 3.663 |
 | [UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md) | 1 | 15.46M | 3.727 | 3.683 | 4.120 | 3.678 | 3.645 |
 | [UD2-gate-q128](../variants/ud2-gate-q128.md) | 1 | 15.45M | 3.760 | 3.715 | 4.130 | 3.713 | 3.673 |
+| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 1 | 15.46M | 3.716 | 3.671 | 4.104 | 3.668 | 3.632 |
+| [UD2-gate-norm-q128-rope](../variants/ud2-gate-norm-q128-rope.md) | 1 | 15.45M | 3.732 | 3.688 | 4.122 | 3.684 | 3.651 |
+| [UD2-gate-norm-h4q8](../variants/ud2-gate-norm-h4q8.md) | 1 | 15.46M | 3.732 | 3.688 | 4.124 | 3.683 | 3.654 |
+| [UD2-gate-mass-q32](../variants/ud2-gate-mass-q32.md) | 1 | 15.45M | 3.749 | 3.705 | 4.114 | 3.702 | 3.669 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3 | 15.45M | 3.796（3.793–3.799） | 3.753 | 4.154 | 3.751 | 3.713 |
 | [Transformer](../variants/transformer.md) | 3 | 15.19M | 3.945（3.928–3.957） | 5.016 | 4.237 | 3.918 | 6.088 |
 
@@ -50,14 +55,16 @@
 - **不是每層一個縮放就夠**：UD2-scale 3.776，跟 UD2 一樣；學到的縮放都在 0.88–1.04，沒離開 1。UD2-gate 的門每層平均 0.15–1.13，同一層裡不同類別、位置幾乎一樣（第 1 層 0.54–0.59），但它的讀出本身比較大（每層平均 0.38–2.31，UD2-scale 0.25–1.30）。是門跟著輸入變的那一點點有用，還是門讓模型學出更大的讀出再縮小，這次分不開。
 - **讀出 RMSNorm 的進步越後面越大**：UD2-gate-norm 3.739，前 64 個 token +0.003，512–1,024 -0.030（對 UD2-gate）。UD2-gate 記得久的層讀出隨位置變大（第 1 層 0.35 → 0.93），門沒有跟著調。
 - **讀位址修正**：UD2-gate-q32 3.746，格子少 7% 還好 0.021；補最多的是位置 64–256 的新 token（見[逐 token 差距](token-gap.md)）。修正加到秩 128（UD2-gate-q128，hidden_dim 538）反而是 3.760，比秩 32 差 0.015：秩加大要拿格子換，格子少的代價看起來大過修正多出的容量，但兩者綁在一起分不開。
-- **兩個一起大約疊加八成**：UD2-gate-norm-q32 3.727，比 UD2-gate 好 0.039（各自 0.028、0.021），是目前 15M 最好的統一 block，贏 Transformer（三個 seed 平均）0.218；前 64 個 token 打平（+0.001），進步都在 64 以後。讀到 20K 的 16K–20K 3.645，是 15M 模型裡這段最好的。
+- **兩個一起大約疊加八成**：UD2-gate-norm-q32 3.727，比 UD2-gate 好 0.039（各自 0.028、0.021），贏 Transformer（三個 seed 平均）0.218；前 64 個 token 打平（+0.001），進步都在 64 以後。讀到 20K 的 16K–20K 3.645。
+- **記憶加上旋轉相對位置又好 0.011**：UD2-gate-norm-q32-rope 3.716，不加參數，是目前 15M 最好的統一 block，贏 Transformer 0.229。每一段都好（對 UD2-gate-norm-q32，前 64 個 token -0.016，512–1,024 -0.010）；讀到 20K 的 16K–20K 3.632，是 15M 模型裡這段最好的；進步在新 token（見[逐 token 差距](token-gap.md)）。
+- **其他三個沒有用**：旋轉加秩 128 的 UD2-gate-norm-q128-rope 3.732；讀出拆成 4 個 head 的 UD2-gate-norm-h4q8 3.732（參數一樣，記憶那一步貴約 4 倍）；讀出除以記憶量的 UD2-gate-mass-q32 3.749（UD2-gate-q32 3.746）。
 - **都沒有擋掉舊內容的干擾**：截掉遠處前文，新 token 還是變好（見[遠處的前文值多少](reach.md)）。
 
 ## 注意
 
 - 除了 UD2-gate，都只有 1 個 seed（UD2-gate 的 seed 標準差 0.003）。
-- UD2-gate-q32、UD2-gate-norm-q32 的 hidden_dim 降到 662 來對齊參數，記憶格子少 7%；UD2-gate-q128 降到 538，少 24%。
+- UD2-gate-q32、UD2-gate-norm-q32 的 hidden_dim 降到 662 來對齊參數，記憶格子少 7%；UD2-gate-q128、UD2-gate-norm-q128-rope 降到 538，少 24%；UD2-gate-norm-q32-rope、UD2-gate-norm-h4q8、UD2-gate-mass-q32 是 662。
 
 ## 涉及的變體
 
-[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)、[UD2-gate-q128](../variants/ud2-gate-q128.md)
+[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)、[UD2-gate-q128](../variants/ud2-gate-q128.md)、[UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md)、[UD2-gate-norm-q128-rope](../variants/ud2-gate-norm-q128-rope.md)、[UD2-gate-norm-h4q8](../variants/ud2-gate-norm-h4q8.md)、[UD2-gate-mass-q32](../variants/ud2-gate-mass-q32.md)

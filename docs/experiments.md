@@ -18,7 +18,7 @@
 | 實驗 | 問題 | 簡短回答 |
 | --- | --- | --- |
 | [規模：15M → 42M → 110M](experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 打平到略輸：最好的 U-Delta-rawFFN+λlr1000 輸 0.009（1 個 seed）。 |
-| [讀出端：門、縮放、RMSNorm、讀位址修正](experiments/read-side.md) | 記憶的讀出怎麼改？ | 讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正都有用，合起來 3.727；每層一個固定縮放沒有用，修正加到秩 128 反而變差。 |
+| [讀出端：門、縮放、RMSNorm、讀位址修正、旋轉相對位置](experiments/read-side.md) | 記憶的讀出怎麼改？ | 讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正、記憶裡的旋轉相對位置都有用，合起來 3.716；每層固定縮放、秩 128、多 head、除以記憶量都沒用。 |
 | [逐 token 差距：輸在哪些 token](experiments/token-gap.md) | 統一 block 跟 Transformer 的差距落在哪些 token 上？ | 15M 贏的近九成是照抄前文；42M 輸的全是窗口裡沒出現過的新 token。 |
 | [遠處的前文值多少](experiments/reach.md) | 把前文截到最近 128 或 512 個 token，會差多少？42M 輸在新 token 是因為遠距記憶嗎？ | 不是：約七成的差距在最近 128 個 token 內就有；遠處前文主要用來照抄，記憶模型的新 token 還會被舊內容干擾，讀出端的修改都沒擋掉。 |
 | [多 seed 的穩定性](experiments/seeds.md) | 差距是不是 seed 的噪聲？ | 統一 block 的 seed 標準差約 0.003，Transformer 約 0.016；最新的統一 block 三個 seed 都贏。 |
@@ -51,8 +51,12 @@
 | [UD2-scale](variants/ud2-scale.md) | `SDulas` | UD2-gate 的對照：每個 token 的門換成每層一個可學的純量 2·sigmoid(b)。每層多 1 個參數。 | 3.776 |
 | [UD2-gate-norm](variants/ud2-gate-norm.md) | `SDulagn` | UD2-gate 的讀出先 RMSNorm 再過門（GDN 的做法）。每層多 288 個參數。 | 3.739 |
 | [UD2-gate-q32](variants/ud2-gate-q32.md) | `SDulagq` | UD2-gate 的讀位址加一個秩 32 的修正，讓讀和寫的比對不對稱；hidden_dim 降到 662 對齊參數。 | 3.746 |
-| [UD2-gate-norm-q32](variants/ud2-gate-norm-q32.md) | `SDulagnq` | 15M 目前最好（1 個 seed）。 UD2-gate-norm 和 UD2-gate-q32 合在一起：讀出先 RMSNorm，讀位址加秩 32 的修正。 | 3.727 |
+| [UD2-gate-norm-q32](variants/ud2-gate-norm-q32.md) | `SDulagnq` | UD2-gate-norm 和 UD2-gate-q32 合在一起：讀出先 RMSNorm，讀位址加秩 32 的修正。 | 3.727 |
 | [UD2-gate-q128](variants/ud2-gate-q128.md) | `UD2-gate-q128` | UD2-gate-q32 的讀位址修正從秩 32 加到 128；hidden_dim 降到 538 對齊參數（格子少 19%）。 | 3.760 |
+| [UD2-gate-norm-q32-rope](variants/ud2-gate-norm-q32-rope.md) | `UD2-gate-norm-q32-rope` | 15M 目前最好（1 個 seed）。 UD2-gate-norm-q32 的一半格子兩兩成對旋轉（週期 4–256 個 token），讓記憶的比對看相對距離；不加參數。 | 3.716 |
+| [UD2-gate-norm-q128-rope](variants/ud2-gate-norm-q128-rope.md) | `UD2-gate-norm-q128-rope` | 三個讀出端的修改一起：讀出 RMSNorm、秩 128 的讀位址修正、一半格子加旋轉相對位置；hidden_dim 538。 | 3.732 |
+| [UD2-gate-norm-h4q8](variants/ud2-gate-norm-h4q8.md) | `UD2-gate-norm-h4q8` | UD2-gate-norm-q32 的讀出拆成 4 個 head，每個 head 有自己秩 8 的讀位址修正、各自 RMSNorm；參數一樣。 | 3.732 |
+| [UD2-gate-mass-q32](variants/ud2-gate-mass-q32.md) | `UD2-gate-mass-q32` | UD2-gate-q32 的讀出除以位址碰到的記憶量（像 softmax 的分母）。 | 3.749 |
 
 ### 記憶設計
 
@@ -119,6 +123,10 @@
 | --- | --- | ---: | ---: | ---: | ---: |
 | **統一 block（主線）** | | | | | |
 | UD2-gate-norm-q32 | `SDulagnq` | 15.46M | 1 | 3.727 | 3.683 |
+| UD2-gate-norm-q32-rope | `UD2-gate-norm-q32-rope` | 15.46M | 1 | 3.716 | 3.671 |
+| UD2-gate-norm-h4q8 | `UD2-gate-norm-h4q8` | 15.46M | 1 | 3.732 | 3.688 |
+| UD2-gate-norm-q128-rope | `UD2-gate-norm-q128-rope` | 15.45M | 1 | 3.732 | 3.688 |
+| UD2-gate-mass-q32 | `UD2-gate-mass-q32` | 15.45M | 1 | 3.749 | 3.705 |
 | UD2-gate-q128 | `UD2-gate-q128` | 15.45M | 1 | 3.760 | 3.715 |
 | UD2-gate-norm | `SDulagn` | 15.46M | 1 | 3.739 | 3.696 |
 | UD2-gate-q32 | `SDulagq` | 15.45M | 1 | 3.746 | 3.701 |
@@ -219,6 +227,10 @@
 | UD2-gate | 3.988 | 3.665 | 3.702 | 3.739 | 3.741 | 3.711 | 3.685 |
 | UD2-gate-norm | 3.979 | 3.644 | 3.670 | 3.711 | 3.717 | 3.683 | 3.661 |
 | UD2-gate-q32 | 3.976 | 3.651 | 3.672 | 3.715 | 3.719 | 3.684 | 3.663 |
+| UD2-gate-norm-q32-rope | 3.954 | 3.619 | 3.645 | 3.687 | 3.689 | 3.655 | 3.632 |
+| UD2-gate-norm-q128-rope | 3.977 | 3.638 | 3.658 | 3.704 | 3.708 | 3.673 | 3.651 |
+| UD2-gate-mass-q32 | 3.964 | 3.657 | 3.682 | 3.722 | 3.723 | 3.690 | 3.669 |
+| UD2-gate-norm-h4q8 | 3.967 | 3.632 | 3.661 | 3.703 | 3.709 | 3.675 | 3.654 |
 | UD2-gate-norm-q32 | 3.984 | 3.630 | 3.656 | 3.700 | 3.703 | 3.670 | 3.645 |
 | UD2-gate-q128 | 3.994 | 3.671 | 3.689 | 3.728 | 3.734 | 3.698 | 3.673 |
 | U-Delta-rawFFN+λlr1000+carry | 4.126 | 3.711 | 3.731 | 3.774 | 3.769 | 3.735 | 3.710 |
@@ -245,8 +257,8 @@
 
 ## 進行中與待決定
 
-- **進行中**（15M）：UD2-gate-norm-q32-rope（一半格子加旋轉相對位置）、UD2-gate-norm-q128-rope（三個讀出端的修改一起）、UD2-gate-norm-h4q8（讀出拆成 4 個 head）、UD2-gate-mass-q32（讀出除以位址碰到的記憶量）。q32-rope 和 mass 第一次跑時程式有 bug（讀位址修正沒有作用），已從頭重跑。
-- **待決定**：UD2 系列跑 42M（UD2-gate-norm-q32 或 UD2-gate）；42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
+- **進行中**：UD2-gate-norm-q32-rope 的 42M（hidden_dim 1,195，41.77M 參數，跟 U-Delta-rawFFN+λlr1000 42M 對齊）。
+- **待決定**：42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
 
 ## 資料與程式碼
 

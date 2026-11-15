@@ -34,6 +34,10 @@
 | UD2-gate-q32 | 3.976 | 3.651 | 3.672 | 3.715 | 3.719 | 3.684 | 3.663 |
 | UD2-gate-norm-q32 | 3.984 | 3.630 | 3.656 | 3.700 | 3.703 | 3.670 | 3.645 |
 | UD2-gate-q128 | 3.994 | 3.671 | 3.689 | 3.728 | 3.734 | 3.698 | 3.673 |
+| UD2-gate-norm-q32-rope | 3.954 | 3.619 | 3.645 | 3.687 | 3.689 | 3.655 | 3.632 |
+| UD2-gate-norm-q128-rope | 3.977 | 3.638 | 3.658 | 3.704 | 3.708 | 3.673 | 3.651 |
+| UD2-gate-mass-q32 | 3.964 | 3.657 | 3.682 | 3.722 | 3.723 | 3.690 | 3.669 |
+| UD2-gate-norm-h4q8 | 3.967 | 3.632 | 3.661 | 3.703 | 3.709 | 3.675 | 3.654 |
 | U-Delta-rawFFN+λlr1000+carry | 4.126 | 3.711 | 3.731 | 3.774 | 3.769 | 3.735 | 3.710 |
 | U-Delta+attn（含 attention） | 4.061 | 3.747 | 3.778 | 3.814 | 3.819 | 3.785 | 3.762 |
 
@@ -75,4 +79,4 @@
 
 ## 涉及的變體
 
-[Transformer](../variants/transformer.md)、[Transformer+SSMax](../variants/transformer-ssmax.md)、[GDN](../variants/gdn.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)、[UD2-gate-q128](../variants/ud2-gate-q128.md)、[U-Delta-rawFFN+λlr1000+carry](../variants/u-delta-rawffn-lambda-lr1000-carry.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)
+[Transformer](../variants/transformer.md)、[Transformer+SSMax](../variants/transformer-ssmax.md)、[GDN](../variants/gdn.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[UD2](../variants/ud2.md)、[UD2-scale](../variants/ud2-scale.md)、[UD2-gate](../variants/ud2-gate.md)、[UD2-gate-norm](../variants/ud2-gate-norm.md)、[UD2-gate-q32](../variants/ud2-gate-q32.md)、[UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md)、[UD2-gate-q128](../variants/ud2-gate-q128.md)、[UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md)、[UD2-gate-norm-q128-rope](../variants/ud2-gate-norm-q128-rope.md)、[UD2-gate-mass-q32](../variants/ud2-gate-mass-q32.md)、[UD2-gate-norm-h4q8](../variants/ud2-gate-norm-h4q8.md)、[U-Delta-rawFFN+λlr1000+carry](../variants/u-delta-rawffn-lambda-lr1000-carry.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)
