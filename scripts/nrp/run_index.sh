@@ -5,8 +5,10 @@
 # takes over a line whose pod was stopped resumes from there, and the copy is deleted once the run is published.
 # train_seconds in timing.json counts this pod only.
 set -euo pipefail
-# compiled graphs and kernels are cached on the PVC, so a variant compiles once per GPU type instead of once per run
-export TORCHINDUCTOR_CACHE_DIR=/workspace/cache/inductor TORCHINDUCTOR_FX_GRAPH_CACHE=1 TORCHINDUCTOR_AUTOGRAD_CACHE=1
+# compiled graphs and kernels are cached on the PVC, so a variant compiles once per GPU type instead of once per run;
+# INDUCTOR_DIR overrides it (the fork session uses local /scratch: on some nodes the cephfs metadata waits stretch a
+# new variant's compile to 30-45 min with the GPU idle)
+export TORCHINDUCTOR_CACHE_DIR=${INDUCTOR_DIR:-/workspace/cache/inductor} TORCHINDUCTOR_FX_GRAPH_CACHE=1 TORCHINDUCTOR_AUTOGRAD_CACHE=1
 
 PLAN=$1
 LINE=$(sed -n "$((JOB_COMPLETION_INDEX + 1))p" "scripts/nrp/$PLAN")
