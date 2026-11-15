@@ -4,7 +4,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 研究目标见 [`docs/research_goal.md`](docs/research_goal.md)，各规模的设置与训练命令见 [`docs/models.md`](docs/models.md)。
 
-## 當前進展（統一性實驗，截至 2026-11-14）
+## 當前進展（統一性實驗，截至 2026-11-15）
 
 目標：**不含 attention 的統一 block**——同一組格子同時當 FFN 和上下文記憶——在同樣的資料、步數和學習率下，達到同規模 Transformer 的語言建模質量。FineWeb-Edu，Llama 2 32K 詞表，所有模型用同一個學習率 5e-4，沒有調參。完整報告（設定、全部結果表）見 [`docs/experiments.md`](docs/experiments.md)。
 
@@ -13,12 +13,16 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | 模型 | 是什麼 | 15M | 42M | 讀到 20K（15M，16K–20K 段） |
 | --- | --- | ---: | ---: | ---: |
 | [Transformer](docs/variants/transformer.md) | llama2.c 式基線 | 3.945（3 個 seed） | **3.214** | 6.049（完整上下文）/ 3.893（滑動窗口 1,024） |
-| **[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)** | 3 個 seed、有 42M 的統一 block 裡最好的 | **3.796**（3 個 seed） | 3.223 | **3.713** |
+| **[UD2-gate-norm-q32](docs/variants/ud2-gate-norm-q32.md)** | 15M 目前最好的統一 block（1 個 seed） | **3.727** | 還沒跑 | 還沒跑 |
+| [UD2-gate](docs/variants/ud2-gate.md) | 15M 有 3 個 seed 的最好統一 block | 3.765（3 個 seed） | 還沒跑 | 3.685 |
+| [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) | 有 42M 的統一 block 裡最好的 | 3.796（3 個 seed） | 3.223 | 3.713 |
 | [U-Avg](docs/variants/u-avg.md) | 原版統一 block（`model.py`） | 4.112（3 個 seed） | 3.423 | — |
 
 驗證 NLL，長度 1,024，越低越好。15M 和 42M 的參數量與 Transformer 對齊到 ±2%。
 
-從原版到現在（15M）：[U-Avg](docs/variants/u-avg.md) 4.112 → 記憶改用 delta rule（[U-Delta](docs/variants/u-delta.md)）3.898 → FFN 那一半讀未歸一化的位址（[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)）3.812 → 遺忘率學快 1,000 倍（[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)）3.796 → 寫入目標改錨在 FFN 實際的輸出 μz（[U-Delta-rawFFN+λlr1000+rawanchor](docs/variants/u-delta-rawffn-lambda-lr1000-rawanchor.md)）3.778 → 記憶讀出加每個 token 一個門（[U-Delta-rawFFN+λlr1000+rawanchor+readgate](docs/variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md)）3.766（後兩步各 1 個 seed，還沒補 seed 和 42M）。
+名稱：UD2 = U-Delta-rawFFN+λlr1000 再把寫入目標錨在 FFN 實際的輸出（代號 `SDula`），是 2026-11-15 起的基底；之後的變體用“UD2-後綴”，後綴依序表示讀出端的修改：gate＝每個 token 的讀出門，scale＝每層一個固定縮放，norm＝讀出先 RMSNorm，qN＝讀位址加秩 N 的修正，rope＝記憶裡的旋轉相對位置。
+
+從原版到現在（15M）：[U-Avg](docs/variants/u-avg.md) 4.112 → 記憶改用 delta rule（[U-Delta](docs/variants/u-delta.md)）3.898 → FFN 那一半讀未歸一化的位址（[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)）3.812 → 遺忘率學快 1,000 倍（[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)）3.796 → 寫入目標改錨在 FFN 實際的輸出 μz（[UD2](docs/variants/ud2.md)）3.778 → 記憶讀出加每個 token 一個門（[UD2-gate](docs/variants/ud2-gate.md)）3.765（3 個 seed）→ 讀出先 RMSNorm、讀位址加秩 32 的修正（[UD2-gate-norm-q32](docs/variants/ud2-gate-norm-q32.md)）3.727（UD2 和最後一步各 1 個 seed，都還沒跑 42M）。
 
 ### 主張
 
@@ -31,8 +35,9 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 ### 主要觀察
 
 - **少數層記得久，其他層很快忘。** 放開遺忘率的學習率，按格子平均的記憶長度大多縮到約 1 個 token，NLL 反而變好，讀到 20K 也越讀越好；但按寫入量加權，U-Delta-rawFFN+λlr1000 仍有 3 層過了 256 個 token 還留 20–44% 的寫入量（42M 有 5 層留 22–50%），U-Delta-λlr1000 也有 4 層留 18–34%。強迫保留慢記憶（U-Delta+slow、U-Delta-diverseλ）讀到 4K 以後變差。見[記憶設計](docs/experiments/memory-design.md)、[每個格子記多久](docs/experiments/slot-retention.md)。
-- **42M 輸在新 token 的差距不是遠距記憶。** 把前文截到最近 65–128 個 token，差距還有 +0.016（完整 +0.022），約七成在最近 128 個 token 內就有；記憶模型的新 token 甚至被舊內容干擾（截掉遠處反而變好），給記憶讀出加一個門（[U-Delta-rawFFN+λlr1000+rawanchor+readgate](docs/variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md)）整體更好，干擾卻沒變少。見[遠處前文值多少](docs/experiments/reach.md)。
+- **42M 輸在新 token 的差距不是遠距記憶。** 把前文截到最近 65–128 個 token，差距還有 +0.016（完整 +0.022），約七成在最近 128 個 token 內就有；記憶模型的新 token 甚至被舊內容干擾（截掉遠處反而變好），讀出端的修改（門、RMSNorm、讀位址修正）整體都更好，干擾卻沒變少。見[遠處前文值多少](docs/experiments/reach.md)。
 - **記憶值 0.58，讀前文全靠它。** 把記憶拿掉、從頭訓練的 [U-Delta-rawFFN-nomem](docs/variants/u-delta-rawffn-nomem.md) 是 4.388（U-Delta-rawFFN 3.812），每個位置都一樣，前文完全沒有幫助。推理時關掉記憶 NLL 升 1.5–2.0（高估了作用，模型沒學過沒有記憶的情況）；U-Delta-rawFFN+λlr1000 按格子平均大部分層只記 1–2 個 token，卻比 U-Delta-rawFFN 更依賴記憶。見[拿掉記憶](docs/experiments/memory-ablation.md)。
+- **讀出端是目前最有效的方向。** 每層一個固定的讀出縮放沒有用（[UD2-scale](docs/variants/ud2-scale.md) 3.776，跟 UD2 一樣）；每個 token 的門有用（3 個 seed 都好）；讀出先 RMSNorm 讓後面的位置變好（[UD2-gate-norm](docs/variants/ud2-gate-norm.md) 3.739，512–1,024 好 0.030、前 64 個 token 打平）；讀位址加秩 32 的修正補最多的是位置 64–256 的新 token（[UD2-gate-q32](docs/variants/ud2-gate-q32.md) 3.746）。見[讀出端](docs/experiments/read-side.md)。
 - **單一記憶就夠，不需要第二份慢記憶。** U-Delta+slow 的慢記憶沒學（速率停在初始值）；同容量的兩份快記憶跟一份一樣；單一記憶讓中間層忘快一點就追平它。
 - **內容主要是被遺忘掉的，不是被新寫入覆蓋掉的。** 絕大多數格子覆寫占比不到 1%，遺忘門讓實際遺忘比基礎速率快約 10–35 倍；只有少數常被寫的格子覆寫較重（U-Delta 第 6–9 層按層平均 13–22%）。見[遺忘還是覆寫](docs/experiments/forgetting-vs-overwrite.md)。
 - **記憶偏向寫意外的 token，但很弱。** 寫入量和 token loss 的 Spearman 相關只有 0.14–0.21；模型自己 greedy 生成（幾乎都是預測到的）時寫入量還有真實文字的 0.52–0.74 倍。見[寫入量與 loss](docs/experiments/write-vs-loss.md)。
@@ -52,8 +57,12 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | [U-Delta](docs/variants/u-delta.md) | 把格子裡的“後驗均值”換成以 FFN 為錨的 delta rule 記憶：記憶只存 FFN 沒預測到的部分，同一個位址的新值按比例覆蓋舊值。 | 3.898（3 個 seed，3.895–3.901） |
 | [U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) | U-Delta 的 FFN 那一半改讀未歸一化的 relu²（就是標準的 ReLU² FFN），記憶那一半不變。 | 3.812 |
 | [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) | U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。 | 3.796（3 個 seed，3.793–3.799） |
-| [U-Delta-rawFFN+λlr1000+rawanchor](docs/variants/u-delta-rawffn-lambda-lr1000-rawanchor.md) | U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。 | 3.778 |
-| [U-Delta-rawFFN+λlr1000+rawanchor+readgate](docs/variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md) | U-Delta-rawFFN+λlr1000+rawanchor 的記憶讀出乘上每個 token 一個門 o = 2·sigmoid(w·h + b)（0 到 2，起點約 1），記憶對這個 token 沒用時可以調小。每層多 289 個參數。 | 3.766 |
+| [UD2](docs/variants/ud2.md) | U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。之後的變體都是 UD2 加後綴，後綴表示讀出端的修改。 | 3.778 |
+| [UD2-gate](docs/variants/ud2-gate.md) | UD2 的記憶讀出乘上每個 token 一個門 o = 2·sigmoid(w·h + b)（0 到 2，起點約 1）。每層多 289 個參數。3 個 seed 都比 UD2 好。 | 3.765（3 個 seed，3.761–3.767） |
+| [UD2-scale](docs/variants/ud2-scale.md) | UD2-gate 的對照：每個 token 的門換成每層一個可學的純量 2·sigmoid(b)。每層多 1 個參數。 | 3.776 |
+| [UD2-gate-norm](docs/variants/ud2-gate-norm.md) | UD2-gate 的讀出先 RMSNorm 再過門（GDN 的做法）。每層多 288 個參數。 | 3.739 |
+| [UD2-gate-q32](docs/variants/ud2-gate-q32.md) | UD2-gate 的讀位址加一個秩 32 的修正，讓讀和寫的比對不對稱；hidden_dim 降到 662 對齊參數。 | 3.746 |
+| [UD2-gate-norm-q32](docs/variants/ud2-gate-norm-q32.md) | UD2-gate-norm 和 UD2-gate-q32 合在一起：讀出先 RMSNorm，讀位址加秩 32 的修正。 | 3.727 |
 
 **記憶設計**
 
@@ -119,8 +128,9 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | 實驗 | 問題 | 簡短回答 |
 | --- | --- | --- |
 | [規模：15M → 42M → 110M](docs/experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 打平到略輸：最好的 U-Delta-rawFFN+λlr1000 輸 0.009（1 個 seed）。 |
+| [讀出端：門、縮放、RMSNorm、讀位址修正](docs/experiments/read-side.md) | 記憶的讀出怎麼改？ | 讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正都有用，合起來 3.727；每層一個固定縮放沒有用。 |
 | [逐 token 差距：輸在哪些 token](docs/experiments/token-gap.md) | 統一 block 跟 Transformer 的差距落在哪些 token 上？ | 15M 贏的近九成是照抄前文；42M 輸的全是窗口裡沒出現過的新 token。 |
-| [遠處的前文值多少](docs/experiments/reach.md) | 把前文截到最近 128 或 512 個 token，會差多少？42M 輸在新 token 是因為遠距記憶嗎？ | 不是：約七成的差距在最近 128 個 token 內就有；遠處前文主要用來照抄，記憶模型的新 token 還會被舊內容干擾，加讀出門也沒擋掉。 |
+| [遠處的前文值多少](docs/experiments/reach.md) | 把前文截到最近 128 或 512 個 token，會差多少？42M 輸在新 token 是因為遠距記憶嗎？ | 不是：約七成的差距在最近 128 個 token 內就有；遠處前文主要用來照抄，記憶模型的新 token 還會被舊內容干擾，讀出端的修改都沒擋掉。 |
 | [多 seed 的穩定性](docs/experiments/seeds.md) | 差距是不是 seed 的噪聲？ | 統一 block 的 seed 標準差約 0.003，Transformer 約 0.016；最新的統一 block 三個 seed 都贏。 |
 | [統一的對照：共享位址 vs 分開位址](docs/experiments/unification.md) | 同一組格子同時當 FFN 和記憶，會不會比分開差？ | 原版上分開的好 0.074，但多 16% 參數；U-Delta 上還沒做。 |
 | [記憶的寫法：平均、遺忘門、delta rule](docs/experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |

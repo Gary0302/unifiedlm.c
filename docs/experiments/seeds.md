@@ -16,6 +16,7 @@
 | 模型 | 規模 | seed 數 | 平均 | 標準差 | 範圍 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | [Transformer](../variants/transformer.md) | 15M | 3 | 3.945 | 0.016 | 3.928–3.957 |
+| [UD2-gate](../variants/ud2-gate.md) | 15M | 3 | 3.765 | 0.003 | 3.761–3.767 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 15M | 3 | 3.796 | 0.003 | 3.793–3.799 |
 | [U-Delta](../variants/u-delta.md) | 15M | 3 | 3.898 | 0.003 | 3.895–3.901 |
 | [U-Gate](../variants/u-gate.md) | 15M | 3 | 3.998 | 0.008 | 3.988–4.003 |
@@ -28,8 +29,9 @@
 
 - **統一 block 的 seed 差距很小**（標準差 0.002–0.008），Transformer 大約 0.016。
 - **U-Delta-rawFFN+λlr1000 三個 seed 都贏 Transformer**：同 seed 配對每組差 -0.161 到 -0.134。
+- **UD2-gate 三個 seed 都比 UD2 好**：3.766, 3.767, 3.761 對 3.778（UD2 只有 1 個 seed）。
 - 只有 1 個 seed 的結果，差距小於約 0.02 時要小心。
 
 ## 涉及的變體
 
-[Transformer](../variants/transformer.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta](../variants/u-delta.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[Split](../variants/split.md)、[U-Avg](../variants/u-avg.md)
+[Transformer](../variants/transformer.md)、[UD2-gate](../variants/ud2-gate.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta](../variants/u-delta.md)、[U-Gate](../variants/u-gate.md)、[U-Gate-fastinit](../variants/u-gate-fastinit.md)、[Split](../variants/split.md)、[U-Avg](../variants/u-avg.md)
