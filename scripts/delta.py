@@ -295,11 +295,32 @@ class ReadGateAnchorDeltaBlock(AnchorRawFFNDeltaBlock):
             k = F.pad(r[:, :-1], (0, 0, 1, 0))
             target = v - F.linear(F.pad(z[:, :-1], (0, 0, 1, 0)), _hi(self.mu.weight))
             beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
-            fast = self.read_out(delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r)), h)
+            fast = self.read_out(delta_memory(_unit(k), target, beta, self.log_decay(r), self.query(r, s, u)), h)
         return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+    def query(self, r, s, u):
+        return _unit(r)
 
     def read_out(self, o, h):
         return o * (2 * torch.sigmoid(_lin(self.read, h)))
+
+
+QRANK = 32  # SDulagq: rank of the read-address correction
+
+
+class ReadQueryGateAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
+    """SDulagq: SDulag whose read address gets a low-rank correction of its own, q_t = unit(relu(K u_t + b + U V u_t)^2)
+    (V: dim -> QRANK, U: QRANK -> slots), while the write key stays the FFN code of the token before, unit(r_{t-1}).
+    The match q_t . k_s is then no longer between two codes of the same map: a token can look for slots unlike its own
+    (W_Q != W_K in attention, here at rank QRANK). U starts at 0, so the block starts as SDulag."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.q_down = nn.Linear(args.dim, QRANK, bias=False)
+        self.q_up = nn.Parameter(torch.zeros(args.hidden_dim, QRANK))
+
+    def query(self, r, s, u):
+        return _unit(F.relu(_hi(s) + F.linear(F.linear(_hi(u), _hi(self.q_down.weight)), _hi(self.q_up))).square())
 
 
 class ReadScaleAnchorDeltaBlock(ReadGateAnchorDeltaBlock):

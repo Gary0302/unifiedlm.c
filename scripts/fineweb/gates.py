@@ -47,7 +47,7 @@ def main():
         out["layers"].append({"base_horizon_median": q(hz, .5), "base_horizon_p10": q(hz, .1), "base_horizon_p90": q(hz, .9)})
         if hasattr(layer, "log_pm1"):                       # SDp: the learned address power
             out["layers"][-1]["power"] = 1.0 + layer.log_pm1.detach().clamp(-5.0, 2.0).exp().item()
-    if meta["variant"] in ("SG", "SG64", "SGh", "SGs", "SR", "SD", "SDp", "SDr", "SDw", "SDl", "SDl100", "SDl1000", "SDv", "SDu", "SDul", "SDula", "SDulag", "SDulas", "SDulagn", "SDulc", "SDb", "SD2", "SD2c"):
+    if meta["variant"] in ("SG", "SG64", "SGh", "SGs", "SR", "SD", "SDp", "SDr", "SDw", "SDl", "SDl100", "SDl1000", "SDv", "SDu", "SDul", "SDula", "SDulag", "SDulas", "SDulagn", "SDulagq", "SDulc", "SDb", "SD2", "SD2c"):
         val = np.memmap(sorted(glob.glob(os.path.join(fineweb_subset.fineweb.DATA_DIR, "*.bin")))[-1], dtype=np.uint16, mode="r")
         x = torch.from_numpy(np.stack([val[j * L:(j + 1) * L].astype(np.int64) for j in range(a.windows)])).cuda()
         start = torch.zeros_like(x, dtype=torch.bool)
