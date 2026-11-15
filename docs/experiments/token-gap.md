@@ -63,6 +63,30 @@
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | -0.135 | -0.601 | -0.059 | +0.014 | -0.048 | +0.022 | +0.022 |
 | [U-Delta-rawFFN+λlr1000+rawanchor](../variants/u-delta-rawffn-lambda-lr1000-rawanchor.md) | -0.148 | -0.576 | -0.074 | -0.015 | -0.083 | -0.010 | -0.005 |
 
+### 15M 加讀出門（減 Transformer 15M，seed 1337）
+
+| token 類別 | 占比 | Transformer NLL | U-Delta-rawFFN+λlr1000+rawanchor+readgate − Transformer | U-Delta-rawFFN+λlr1000+rawanchor − Transformer | U-Delta-rawFFN+λlr1000+rawanchor+readgate 差距的占比 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 全部 | 100.0% | 3.893 | -0.156 | -0.148 | 100% |
+| 二元組重複 | 19.9% | 2.017 | -0.587 | -0.576 | 75.0% |
+| 見過 | 36.0% | 3.189 | -0.079 | -0.074 | 18.3% |
+| 新 | 44.1% | 5.317 | -0.024 | -0.015 | 6.7% |
+| 頻率前 100 | 43.3% | 2.167 | -0.043 | -0.041 | 12.1% |
+| 頻率 100–1K | 24.8% | 4.178 | -0.146 | -0.133 | 23.2% |
+| 頻率 1K–10K | 28.5% | 5.789 | -0.292 | -0.277 | 53.4% |
+| 頻率 10K 以後 | 3.3% | 8.003 | -0.531 | -0.546 | 11.3% |
+
+### 15M 加讀出門，按位置
+
+| 模型 | 類別 | 0–64 | 64–256 | 256–1,024 |
+| --- | --- | ---: | ---: | ---: |
+| U-Delta-rawFFN+λlr1000+rawanchor+readgate（15M） | 二元組重複 | -0.508 | -0.534 | -0.596 |
+| U-Delta-rawFFN+λlr1000+rawanchor+readgate（15M） | 見過 | -0.066 | -0.077 | -0.080 |
+| U-Delta-rawFFN+λlr1000+rawanchor+readgate（15M） | 新 | -0.091 | -0.010 | -0.017 |
+| U-Delta-rawFFN+λlr1000+rawanchor（15M） | 二元組重複 | -0.433 | -0.527 | -0.586 |
+| U-Delta-rawFFN+λlr1000+rawanchor（15M） | 見過 | -0.031 | -0.080 | -0.074 |
+| U-Delta-rawFFN+λlr1000+rawanchor（15M） | 新 | -0.083 | -0.010 | -0.005 |
+
 ## 結論
 
 - **15M 贏的主要是照抄前文**：U-Delta-rawFFN+λlr1000 贏 Transformer 0.135，其中 88.9% 來自二元組重複的 token（占 19.9%）：Transformer 2.017 對 1.416。15M 的 Transformer 還不太會照抄；42M 的 Transformer 在同一類降到 1.116，跟統一 block 打平（1.111）。
@@ -70,6 +94,7 @@
 - **15M 也輸在 64 之後的新 token**（+0.022、+0.022），只是被照抄上的大優勢蓋過去。所以這是統一 block 兩個規模共同的弱點。
 - **按頻率**：42M 輸在最常見的前 100 個 token（占 43.3%，+0.014），1K 以後的少見 token 略贏；15M 每一組都贏，越少見贏越多（10K 以後 -0.540）。
 - **15M 新 token 的差距靠 FFN 讀未歸一化的位址補上，不是靠記憶設計**：64–256 的新 token，U-Delta +0.169，保留慢記憶的 U-Delta+slow +0.155、U-Delta-diverseλ +0.141、U-Delta-spreadλ +0.157，記憶短的 U-Delta-λlr1000 +0.114；U-Delta-λlr1000 再讓 FFN 讀未歸一化的位址（= U-Delta-rawFFN+λlr1000）降到 +0.022，+rawanchor -0.010。含 attention 的 U-Delta+attn +0.108，對 0–64 和 64–256 補的量差不多。
+- **讀出門多贏的在照抄和遠處的新 token**：+readgate 對 Transformer -0.156，+rawanchor -0.148；多出來的落在二元組重複 0–64（-0.508 對 -0.433）、新 token 256–1,024（-0.017 對 -0.005）和見過（-0.079 對 -0.074）；新 token 64–256 一樣（-0.010）。
 - 推測（還沒驗證）：統一 block 的記憶按位址取回存過的值，照抄已經追平或更好；輸的是拿整段前文來猜還沒出現過的詞，這需要按內容綜合整段上下文，是 attention 擅長的。
 
 ## 注意
@@ -80,4 +105,4 @@
 
 ## 涉及的變體
 
-[Transformer](../variants/transformer.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-diverseλ](../variants/u-delta-diverse-lambda.md)、[U-Delta-spreadλ](../variants/u-delta-spread-lambda.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)、[U-Delta-rawFFN+λlr1000+rawanchor](../variants/u-delta-rawffn-lambda-lr1000-rawanchor.md)
+[Transformer](../variants/transformer.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta](../variants/u-delta.md)、[U-Delta+slow](../variants/u-delta-plus-slow.md)、[U-Delta-diverseλ](../variants/u-delta-diverse-lambda.md)、[U-Delta-spreadλ](../variants/u-delta-spread-lambda.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta+attn](../variants/u-delta-plus-attn.md)、[U-Delta-rawFFN+λlr1000+rawanchor](../variants/u-delta-rawffn-lambda-lr1000-rawanchor.md)、[U-Delta-rawFFN+λlr1000+rawanchor+readgate](../variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md)
