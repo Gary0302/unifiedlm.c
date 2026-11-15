@@ -29,7 +29,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from gated import CHUNK, GatedBlock
-from model import _hi
+from model import RMSNorm, _hi
 
 
 def delta_memory(k, u, beta, logl, q, chunk=CHUNK, reset=None, E0=None, final=False):
@@ -295,8 +295,104 @@ class ReadGateAnchorDeltaBlock(AnchorRawFFNDeltaBlock):
             k = F.pad(r[:, :-1], (0, 0, 1, 0))
             target = v - F.linear(F.pad(z[:, :-1], (0, 0, 1, 0)), _hi(self.mu.weight))
             beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
-            fast = delta_memory(_unit(k), target, beta, self.log_decay(r), _unit(r)) * (2 * torch.sigmoid(_lin(self.read, h)))
+            fast = self.read_out(self.memory(_unit(k), target, beta, self.log_decay(r), self.query(r, s, u)), h)
         return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+    def memory(self, k, target, beta, logl, q):
+        return delta_memory(k, target, beta, logl, q)
+
+    def query(self, r, s, u):
+        return _unit(r)
+
+    def read_out(self, o, h):
+        return o * (2 * torch.sigmoid(_lin(self.read, h)))
+
+
+QRANK = 32  # SDulagq: rank of the read-address correction
+
+
+class ReadQueryGateAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
+    """SDulagq: SDulag whose read address gets a low-rank correction of its own, q_t = unit(relu(K u_t + b + U V u_t)^2)
+    (V: dim -> QRANK, U: QRANK -> slots), while the write key stays the FFN code of the token before, unit(r_{t-1}).
+    The match q_t . k_s is then no longer between two codes of the same map: a token can look for slots unlike its own
+    (W_Q != W_K in attention, here at rank QRANK). U starts at 0, so the block starts as SDulag."""
+    rank = QRANK
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.q_down = nn.Linear(args.dim, self.rank, bias=False)
+        self.q_up = nn.Parameter(torch.zeros(args.hidden_dim, self.rank))
+
+
+class ReadQuery128GateAnchorDeltaBlock(ReadQueryGateAnchorDeltaBlock):
+    """UD2-gate-q128: UD2-gate-q32 (SDulagq) with the read-address correction at rank 128 instead of 32."""
+    rank = 128
+
+    def query(self, r, s, u):
+        return _unit(F.relu(_hi(s) + F.linear(F.linear(_hi(u), _hi(self.q_down.weight)), _hi(self.q_up))).square())
+
+
+class ReadScaleAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
+    """SDulas: the control for SDulag, one learned read scale per block, 2 sigmoid(b) (1 at initialisation), in place of
+    the per-token gate: SDulag's gate came out nearly the same on every token of a layer (readstats.py)."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        del self.read
+        self.read_b = nn.Parameter(torch.zeros(()))
+
+    def read_out(self, o, h):
+        return o * (2 * torch.sigmoid(self.read_b.float()))
+
+
+class ReadNormGateAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
+    """SDulagn: SDulag with the read RMS-normalised before the gate, o_t RMSNorm(E^T q), as GatedDeltaNet does: the read
+    no longer grows as the memory fills (readstats.py: |E^T q| rises with position in the long-memory layers), and its
+    size is left to the gate. The per-channel gain starts at 1 / sqrt(dim), so the read starts at norm 1."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.read_norm = RMSNorm(args.dim, args.norm_eps)
+        with torch.no_grad():
+            self.read_norm.weight.fill_(args.dim ** -0.5)
+
+    def read_out(self, o, h):
+        return super().read_out(self.read_norm(o), h)
+
+
+class ReadNormQueryGateAnchorDeltaBlock(ReadQueryGateAnchorDeltaBlock, ReadNormGateAnchorDeltaBlock):
+    """SDulagnq: SDulagq's read-address correction with SDulagn's RMS-normalised read before the gate."""
+
+
+ROPE_PERIODS = (4.0, 256.0)  # -rope: periods in tokens of the rotated slot pairs, log-spaced; all seen within L
+
+
+def _rope(x, ang):
+    """Rotate the first 2 P slots of x (B, T, m) in pairs (2j, 2j + 1) by ang (T, P) radians (float64)."""
+    P = ang.size(-1)
+    c, s = ang.cos().to(x.dtype), ang.sin().to(x.dtype)
+    a, b = x[..., 0:2 * P:2], x[..., 1:2 * P:2]
+    return torch.cat([torch.stack((a * c - b * s, a * s + b * c), -1).flatten(-2), x[..., 2 * P:]], -1)
+
+
+class RopeMemoryMixin:
+    """-rope: rotary relative position inside the memory. Half the slots, in pairs, have the write key rotated by its
+    step s and the read address by its step t (angles step * 2 pi / period, periods log-spaced over ROPE_PERIODS), so
+    their match q_t . k_s depends on t - s; the two slots of a pair share one decay (the mean of their log lambda), so
+    the decay commutes with the rotation and the match stays relative. The other half and everything else unchanged;
+    no parameters."""
+
+    def memory(self, k, target, beta, logl, q):
+        T, m = k.shape[1], k.shape[2]
+        P = m // 4
+        period = torch.logspace(math.log10(ROPE_PERIODS[0]), math.log10(ROPE_PERIODS[1]), P, dtype=torch.float64, device=k.device)
+        ang = torch.arange(T, dtype=torch.float64, device=k.device)[:, None] * (2 * math.pi / period)
+        tied = logl[..., :2 * P].unflatten(-1, (P, 2)).mean(-1, keepdim=True).expand(*logl.shape[:-1], P, 2).flatten(-2)
+        return delta_memory(_rope(k, ang), target, beta, torch.cat([tied, logl[..., 2 * P:]], -1), _rope(q, ang))
+
+
+class RopeReadNormQueryGateAnchorDeltaBlock(RopeMemoryMixin, ReadNormQueryGateAnchorDeltaBlock):
+    """UD2-gate-norm-q32-rope: UD2-gate-norm-q32 (SDulagnq) with rotary relative position on half its memory slots."""
 
 
 

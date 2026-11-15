@@ -1,6 +1,6 @@
 # 統一性實驗報告（FineWeb-Edu，15M / 42M）
 
-截至 2026-11-14。目標是**不含 attention 的統一 block**（同一組格子同時當 FFN 和上下文記憶），在同樣的資料、步數和學習率下達到同規模 Transformer 的語言建模質量；含 attention 的版本只作對照。主線問題見 [`research_goal.md`](research_goal.md)。結果、主張和主要觀察在 [README](../README.md)。
+截至 2026-11-15。目標是**不含 attention 的統一 block**（同一組格子同時當 FFN 和上下文記憶），在同樣的資料、步數和學習率下達到同規模 Transformer 的語言建模質量；含 attention 的版本只作對照。主線問題見 [`research_goal.md`](research_goal.md)。結果、主張和主要觀察在 [README](../README.md)。
 
 每個變體一份文件（怎麼做的、程式碼在哪、結果、怎麼重現），每個實驗一份文件（問題、怎麼做的、結果表、結論）。
 
@@ -18,8 +18,9 @@
 | 實驗 | 問題 | 簡短回答 |
 | --- | --- | --- |
 | [規模：15M → 42M → 110M](experiments/scale.md) | 15M 贏 Transformer 會不會只是小模型的現象？ | 15M 贏；42M 打平到略輸：最好的 U-Delta-rawFFN+λlr1000 輸 0.009（1 個 seed）。 |
+| [讀出端：門、縮放、RMSNorm、讀位址修正](experiments/read-side.md) | 記憶的讀出怎麼改？ | 讀出門（3 個 seed）、讀出 RMSNorm、讀位址修正都有用，合起來 3.727；每層一個固定縮放沒有用。 |
 | [逐 token 差距：輸在哪些 token](experiments/token-gap.md) | 統一 block 跟 Transformer 的差距落在哪些 token 上？ | 15M 贏的近九成是照抄前文；42M 輸的全是窗口裡沒出現過的新 token。 |
-| [遠處的前文值多少](experiments/reach.md) | 把前文截到最近 128 或 512 個 token，會差多少？42M 輸在新 token 是因為遠距記憶嗎？ | 不是：約七成的差距在最近 128 個 token 內就有；遠處前文主要用來照抄，記憶模型的新 token 還會被舊內容干擾，加讀出門也沒擋掉。 |
+| [遠處的前文值多少](experiments/reach.md) | 把前文截到最近 128 或 512 個 token，會差多少？42M 輸在新 token 是因為遠距記憶嗎？ | 不是：約七成的差距在最近 128 個 token 內就有；遠處前文主要用來照抄，記憶模型的新 token 還會被舊內容干擾，讀出端的修改都沒擋掉。 |
 | [多 seed 的穩定性](experiments/seeds.md) | 差距是不是 seed 的噪聲？ | 統一 block 的 seed 標準差約 0.003，Transformer 約 0.016；最新的統一 block 三個 seed 都贏。 |
 | [統一的對照：共享位址 vs 分開位址](experiments/unification.md) | 同一組格子同時當 FFN 和記憶，會不會比分開差？ | 原版上分開的好 0.074，但多 16% 參數；U-Delta 上還沒做。 |
 | [記憶的寫法：平均、遺忘門、delta rule](experiments/write-rule.md) | 格子裡的記憶該怎麼寫？ | delta rule 遠好於平均：4.112 → 3.998 → 3.898。 |
@@ -45,8 +46,12 @@
 | [U-Delta](variants/u-delta.md) | `SD` | 把格子裡的“後驗均值”換成以 FFN 為錨的 delta rule 記憶：記憶只存 FFN 沒預測到的部分，同一個位址的新值按比例覆蓋舊值。 | 3.898（3 個 seed，3.895–3.901） |
 | [U-Delta-rawFFN](variants/u-delta-rawffn.md) | `SDu` | U-Delta 的 FFN 那一半改讀未歸一化的 relu²（就是標準的 ReLU² FFN），記憶那一半不變。 | 3.812 |
 | [U-Delta-rawFFN+λlr1000](variants/u-delta-rawffn-lambda-lr1000.md) | `SDul` | 3 個 seed、有 42M 的統一 block 裡最好的。 U-Delta-rawFFN 再加上 U-Delta-λlr1000：每格基礎遺忘率學快 1,000 倍。不加參數。 | 3.796（3 個 seed，3.793–3.799） |
-| [U-Delta-rawFFN+λlr1000+rawanchor](variants/u-delta-rawffn-lambda-lr1000-rawanchor.md) | `SDula` | U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。 | 3.778 |
-| [U-Delta-rawFFN+λlr1000+rawanchor+readgate](variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md) | `SDulag` | 15M 目前最好（1 個 seed）。 U-Delta-rawFFN+λlr1000+rawanchor 的記憶讀出乘上每個 token 一個門 o = 2·sigmoid(w·h + b)（0 到 2，起點約 1），記憶對這個 token 沒用時可以調小。每層多 289 個參數。 | 3.766 |
+| [UD2](variants/ud2.md) | `SDula` | 新的基底 UD2。 U-Delta-rawFFN+λlr1000 的寫入目標改錨在 FFN 實際給出的 μz（原本是歸一化的 μr）。不加參數。之後的變體都是 UD2 加後綴，後綴表示讀出端的修改。 | 3.778 |
+| [UD2-gate](variants/ud2-gate.md) | `SDulag` | UD2 的記憶讀出乘上每個 token 一個門 o = 2·sigmoid(w·h + b)（0 到 2，起點約 1）。每層多 289 個參數。3 個 seed 都比 UD2 好。 | 3.765（3 個 seed，3.761–3.767） |
+| [UD2-scale](variants/ud2-scale.md) | `SDulas` | UD2-gate 的對照：每個 token 的門換成每層一個可學的純量 2·sigmoid(b)。每層多 1 個參數。 | 3.776 |
+| [UD2-gate-norm](variants/ud2-gate-norm.md) | `SDulagn` | UD2-gate 的讀出先 RMSNorm 再過門（GDN 的做法）。每層多 288 個參數。 | 3.739 |
+| [UD2-gate-q32](variants/ud2-gate-q32.md) | `SDulagq` | UD2-gate 的讀位址加一個秩 32 的修正，讓讀和寫的比對不對稱；hidden_dim 降到 662 對齊參數。 | 3.746 |
+| [UD2-gate-norm-q32](variants/ud2-gate-norm-q32.md) | `SDulagnq` | 15M 目前最好（1 個 seed）。 UD2-gate-norm 和 UD2-gate-q32 合在一起：讀出先 RMSNorm，讀位址加秩 32 的修正。 | 3.727 |
 
 ### 記憶設計
 
@@ -112,8 +117,12 @@
 | 模型 | 代號 | 參數量 | seed 數 | 驗證 NLL @1024（範圍） | @4096 |
 | --- | --- | ---: | ---: | ---: | ---: |
 | **統一 block（主線）** | | | | | |
-| U-Delta-rawFFN+λlr1000+rawanchor+readgate | `SDulag` | 15.46M | 1 | 3.766 | 3.723 |
-| U-Delta-rawFFN+λlr1000+rawanchor | `SDula` | 15.45M | 1 | 3.778 | 3.736 |
+| UD2-gate-norm-q32 | `SDulagnq` | 15.46M | 1 | 3.727 | 3.683 |
+| UD2-gate-norm | `SDulagn` | 15.46M | 1 | 3.739 | 3.696 |
+| UD2-gate-q32 | `SDulagq` | 15.45M | 1 | 3.746 | 3.701 |
+| UD2-gate | `SDulag` | 15.46M | 3 | 3.765（3.761–3.767） | 3.722 |
+| UD2-scale | `SDulas` | 15.45M | 1 | 3.776 | 3.734 |
+| UD2 | `SDula` | 15.45M | 1 | 3.778 | 3.736 |
 | U-Delta-rawFFN+λlr1000 | `SDul` | 15.45M | 3 | 3.796（3.793–3.799） | 3.753 |
 | U-Delta-rawFFN+λlr1000+carry | `SDulc` | 15.45M | 1 | 3.815 | 3.759 |
 | U-Delta-rawFFN | `SDu` | 15.45M | 1 | 3.812 | 3.774 |
@@ -203,8 +212,11 @@
 | U-Delta-λlr1000 | 4.085 | 3.753 | 3.776 | 3.814 | 3.813 | 3.776 | 3.752 |
 | U-Delta-rawFFN | 4.024 | 3.725 | 3.748 | 3.796 | 3.803 | 3.780 | 3.760 |
 | U-Delta-rawFFN+λlr1000 | 4.007 | 3.699 | 3.725 | 3.766 | 3.768 | 3.736 | 3.713 |
-| U-Delta-rawFFN+λlr1000+rawanchor | 3.987 | 3.684 | 3.712 | 3.752 | 3.753 | 3.719 | 3.695 |
-| U-Delta-rawFFN+λlr1000+rawanchor+readgate | 3.988 | 3.665 | 3.702 | 3.739 | 3.741 | 3.711 | 3.685 |
+| UD2 | 3.987 | 3.684 | 3.712 | 3.752 | 3.753 | 3.719 | 3.695 |
+| UD2-scale | 3.979 | 3.678 | 3.706 | 3.749 | 3.752 | 3.718 | 3.695 |
+| UD2-gate | 3.988 | 3.665 | 3.702 | 3.739 | 3.741 | 3.711 | 3.685 |
+| UD2-gate-norm | 3.979 | 3.644 | 3.670 | 3.711 | 3.717 | 3.683 | 3.661 |
+| UD2-gate-q32 | 3.976 | 3.651 | 3.672 | 3.715 | 3.719 | 3.684 | 3.663 |
 | U-Delta-rawFFN+λlr1000+carry | 4.126 | 3.711 | 3.731 | 3.774 | 3.769 | 3.735 | 3.710 |
 | U-Delta+attn | 4.061 | 3.747 | 3.778 | 3.814 | 3.819 | 3.785 | 3.762 |
 
@@ -229,8 +241,8 @@
 
 ## 進行中與待決定
 
-- **進行中**：無。
-- **待決定**：U-Delta-rawFFN+λlr1000+rawanchor 補 2 個 seed、跑 42M；42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
+- **進行中**：UD2-gate-q128（讀位址修正加到秩 128）、UD2-gate-norm-q32-rope（UD2-gate-norm-q32 的一半格子加旋轉相對位置），都是 15M；UD2-gate-norm-q32 的讀到 20K 和診斷。
+- **待決定**：UD2 系列跑 42M（UD2-gate-norm-q32 或 UD2-gate）；42M 補 seed（U-Delta-rawFFN+λlr1000 和 Transformer 各 2 個，看 0.009 的差距是不是真的）；U-Delta 系列的共享 vs 分開位址對照；42M 的學習率（U-Delta-rawFFN 只差 0.014）；U-Delta-λlr10、U-Delta-spreadλ 補 seed；Transformer 加 NoPE 層作完整上下文的外推對照；U-Delta 的兩個歸因實驗（寫入目標去掉 −μk 錨、μ 和記憶用各自的位址）；Transformer 學習率 1e-3；Transformer 和 U-Delta 各跑 2 倍步數。
 
 ## 資料與程式碼
 

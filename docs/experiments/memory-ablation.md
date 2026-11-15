@@ -20,7 +20,7 @@
 | [U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md) | 15M | 3.806 | 5.778 | +1.971 | 5.762 | 5.774 | 5.778 | 第 0 層 +0.43、第 5 層 +0.40 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 15M | 3.778 | 5.248 | +1.470 | 5.254 | 5.243 | 5.248 | 第 5 層 +0.50、第 0 層 +0.18 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 15M | 3.759 | 5.357 | +1.598 | 5.347 | 5.356 | 5.357 | 第 5 層 +0.50、第 0 層 +0.34 |
-| [U-Delta-rawFFN+λlr1000+rawanchor+readgate](../variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md) | 15M | 3.737 | 5.387 | +1.650 | 5.391 | 5.383 | 5.387 | 第 5 層 +0.40、第 0 層 +0.39 |
+| [UD2-gate](../variants/ud2-gate.md) | 15M | 3.737 | 5.387 | +1.650 | 5.391 | 5.383 | 5.387 | 第 5 層 +0.40、第 0 層 +0.39 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 42M | 3.212 | 4.969 | +1.757 | 4.978 | 4.960 | 4.969 | 第 6 層 +0.29、第 0 層 +0.22 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 42M | 3.208 | 5.092 | +1.884 | 5.094 | 5.087 | 5.092 | 第 0 層 +0.57、第 7 層 +0.25 |
 
@@ -40,7 +40,7 @@
 | [U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md) | +0.43 | +0.10 | +0.02 | +0.05 | +0.11 | +0.40 | +0.35 | +0.24 | +0.22 | +0.11 | +0.06 | +0.14 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | +0.18 | +0.07 | +0.07 | +0.01 | +0.13 | +0.50 | +0.07 | +0.03 | +0.06 | +0.03 | +0.03 | +0.01 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | +0.34 | +0.09 | +0.12 | +0.01 | +0.06 | +0.50 | +0.13 | +0.05 | +0.10 | +0.04 | +0.04 | +0.02 |
-| [U-Delta-rawFFN+λlr1000+rawanchor+readgate](../variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md) | +0.39 | +0.24 | +0.06 | +0.03 | +0.08 | +0.40 | +0.06 | +0.07 | +0.02 | +0.16 | +0.05 | +0.02 |
+| [UD2-gate](../variants/ud2-gate.md) | +0.39 | +0.24 | +0.06 | +0.03 | +0.08 | +0.40 | +0.06 | +0.07 | +0.02 | +0.16 | +0.05 | +0.02 |
 
 ### 只關一層（42M，長度 1,024，NLL 增加）
 
@@ -56,7 +56,7 @@
 - **全部依賴記憶**：關掉記憶 NLL 升 1.47–1.97（U-Delta 15M 3.857 → 5.737，U-Delta-rawFFN+λlr1000 42M 3.208 → 5.092）。
 - **關掉記憶後按位置是平的**：U-Delta-rawFFN+λlr1000 42M 每段 5.058–5.109，前 64 個 token 跟 512–1,024 一樣，長度 4,096 也一樣。除了每層只看最近 4 個 token 的卷積，模型讀前文全靠記憶。
 - **記憶短的版本更依賴記憶**：U-Delta-rawFFN+λlr1000 按格子平均大部分層的記憶只有 1–2 個 token，關掉記憶卻升 1.60（15M）、1.88（42M），比 U-Delta-rawFFN（1.47、1.76）還多；U-Delta-λlr1000 1.97，比 U-Delta 1.88 多。
-- **最被依賴的層不是記得最久的層**：U-Delta-rawFFN+λlr1000 15M 記得最久的第 1、2 層（38、22 個 token）關掉只升 0.09、0.12；第 0、5 層只記 2、1 個 token，卻升 0.34、0.50；加了讀出門（+rawanchor+readgate）也是第 0、5 層（+0.39、+0.40）。42M 最被依賴的是第 0 層（+0.57）。
+- **最被依賴的層不是記得最久的層**：U-Delta-rawFFN+λlr1000 15M 記得最久的第 1、2 層（38、22 個 token）關掉只升 0.09、0.12；第 0、5 層只記 2、1 個 token，卻升 0.34、0.50；加了讀出門的 UD2-gate 也是第 0、5 層（+0.39、+0.40）。42M 最被依賴的是第 0 層（+0.57）。
 - **U-Delta 的依賴集中在一層**：只關第 6 層就升 1.31；U-Delta-rawFFN 系列最多 0.50，比較平均。
 
 ## 注意
@@ -67,4 +67,4 @@
 
 ## 涉及的變體
 
-[U-Delta](../variants/u-delta.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[U-Delta-rawFFN+λlr1000+rawanchor+readgate](../variants/u-delta-rawffn-lambda-lr1000-rawanchor-readgate.md)、[U-Delta-rawFFN-nomem](../variants/u-delta-rawffn-nomem.md)
+[U-Delta](../variants/u-delta.md)、[U-Delta-λlr1000](../variants/u-delta-lambda-lr1000.md)、[U-Delta-rawFFN](../variants/u-delta-rawffn.md)、[U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md)、[UD2-gate](../variants/ud2-gate.md)、[U-Delta-rawFFN-nomem](../variants/u-delta-rawffn-nomem.md)

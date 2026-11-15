@@ -352,6 +352,24 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDulag":  # SDula with a per-token gate on the memory read, 2 sigmoid(w . h + b)
         import delta
         model.UnifiedBlock = delta.ReadGateAnchorDeltaBlock
+    elif variant == "SDulas":  # control for SDulag: one learned read scale per block instead of a per-token gate
+        import delta
+        model.UnifiedBlock = delta.ReadScaleAnchorDeltaBlock
+    elif variant == "SDulagn":  # SDulag with the memory read RMS-normalised before the gate (GatedDeltaNet's output norm)
+        import delta
+        model.UnifiedBlock = delta.ReadNormGateAnchorDeltaBlock
+    elif variant == "SDulagq":  # SDulag with a low-rank correction on the read address only (asymmetric match)
+        import delta
+        model.UnifiedBlock = delta.ReadQueryGateAnchorDeltaBlock
+    elif variant == "SDulagnq":  # SDulagq with SDulagn's normalised read: both read changes together
+        import delta
+        model.UnifiedBlock = delta.ReadNormQueryGateAnchorDeltaBlock
+    elif variant == "UD2-gate-q128":  # SDulagq (UD2-gate-q32) with the read-address correction at rank 128
+        import delta
+        model.UnifiedBlock = delta.ReadQuery128GateAnchorDeltaBlock
+    elif variant == "UD2-gate-norm-q32-rope":  # SDulagnq (UD2-gate-norm-q32) with rotary relative position in half the memory
+        import delta
+        model.UnifiedBlock = delta.RopeReadNormQueryGateAnchorDeltaBlock
     elif variant == "SDulc":  # SDul with the memory carried across consecutive training windows (gradient stopped)
         import sys
         import delta
