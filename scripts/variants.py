@@ -361,6 +361,9 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "SDulagq":  # SDulag with a low-rank correction on the read address only (asymmetric match)
         import delta
         model.UnifiedBlock = delta.ReadQueryGateAnchorDeltaBlock
+    elif variant == "SDulagnq":  # SDulagq with SDulagn's normalised read: both read changes together
+        import delta
+        model.UnifiedBlock = delta.ReadNormQueryGateAnchorDeltaBlock
     elif variant == "SDulc":  # SDul with the memory carried across consecutive training windows (gradient stopped)
         import sys
         import delta

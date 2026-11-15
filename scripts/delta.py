@@ -351,6 +351,10 @@ class ReadNormGateAnchorDeltaBlock(ReadGateAnchorDeltaBlock):
         return super().read_out(self.read_norm(o), h)
 
 
+class ReadNormQueryGateAnchorDeltaBlock(ReadQueryGateAnchorDeltaBlock, ReadNormGateAnchorDeltaBlock):
+    """SDulagnq: SDulagq's read-address correction with SDulagn's RMS-normalised read before the gate."""
+
+
 
 class NoMemoryDeltaBlock(RawFFNDeltaBlock):
     """SDn: SDu with the memory removed, the control for what the memory buys: y = x + mu z, z = relu(K u + b)^2 on
