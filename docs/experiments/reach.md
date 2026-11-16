@@ -22,6 +22,26 @@
 | 新 | 46,487 | 4.689 | 4.711 | 4.721 | +0.014 | +0.007 | +0.004 |
 | 新，頻率前 100 | 5,433 | 2.894 | 2.915 | 2.920 | -0.010 | -0.018 | -0.028 |
 
+### 42M 加 UD2-gate-norm-q32-rope，截到最近 65–128 個 token（位置 ≥ 128）
+
+| token 類別 | token 數 | Transformer 完整 | U-Delta-rawFFN+λlr1000 完整 | UD2-gate-norm-q32-rope 完整 | Transformer 遠處的價值 | U-Delta-rawFFN+λlr1000 遠處的價值 | UD2-gate-norm-q32-rope 遠處的價值 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 全部 | 114,688 | 3.167 | 3.172 | 3.121 | +0.146 | +0.144 | +0.150 |
+| 二元組重複 | 24,801 | 1.129 | 1.125 | 1.090 | +0.499 | +0.493 | +0.507 |
+| 見過 | 43,400 | 2.700 | 2.693 | 2.636 | +0.087 | +0.091 | +0.100 |
+| 新 | 46,487 | 4.689 | 4.711 | 4.658 | +0.014 | +0.007 | +0.007 |
+| 新，頻率前 100 | 5,433 | 2.894 | 2.915 | 2.886 | -0.010 | -0.018 | -0.021 |
+
+### 42M 加 UD2-gate-norm-q32-rope，截到最近 257–512 個 token（位置 ≥ 512）
+
+| token 類別 | token 數 | Transformer 完整 | U-Delta-rawFFN+λlr1000 完整 | UD2-gate-norm-q32-rope 完整 | Transformer 遠處的價值 | U-Delta-rawFFN+λlr1000 遠處的價值 | UD2-gate-norm-q32-rope 遠處的價值 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 全部 | 65,536 | 3.132 | 3.138 | 3.083 | +0.026 | +0.028 | +0.029 |
+| 二元組重複 | 15,783 | 1.190 | 1.190 | 1.146 | +0.092 | +0.101 | +0.103 |
+| 見過 | 25,830 | 2.790 | 2.785 | 2.727 | +0.014 | +0.014 | +0.015 |
+| 新 | 23,923 | 4.781 | 4.803 | 4.746 | -0.004 | -0.006 | -0.005 |
+| 新，頻率前 100 | 1,957 | 2.954 | 3.005 | 2.959 | -0.007 | -0.012 | -0.010 |
+
 ### 42M，截到最近 257–512 個 token（位置 ≥ 512）
 
 | token 類別 | token 數 | Transformer 完整 | U-Delta-rawFFN+λlr1000 完整 | U-Delta-rawFFN 完整 | Transformer 遠處的價值 | U-Delta-rawFFN+λlr1000 遠處的價值 | U-Delta-rawFFN 遠處的價值 |
@@ -98,6 +118,7 @@
 - **42M 輸在新 token 的差距約七成在最近 128 個 token 內就有**：U-Delta-rawFFN+λlr1000 − Transformer 完整前文 +0.022，截到 65–128 後 +0.016（71.7%）。Transformer 從 128 以外的新 token 拿到 0.014，U-Delta-rawFFN+λlr1000 0.007，U-Delta-rawFFN 0.004。位置 ≥ 512 截到 257–512，所有模型從更遠處拿到的都 ≤ 0（Transformer -0.004，U-Delta-rawFFN+λlr1000 -0.006）。所以剩下的差距不是遠距記憶，是在最近 128 個 token 內用前文猜新詞。
 - **記憶模型的新 token 會被舊內容干擾**：15M 截到 65–128 後，所有記憶模型的新 token 都變好（U-Delta -0.010、U-Delta+slow -0.015、U-Delta-diverseλ -0.020、U-Delta-rawFFN+λlr1000 -0.010、UD2 -0.013），Transformer 變差（+0.011）；保留慢記憶的 U-Delta+slow、U-Delta-diverseλ 變得最多。42M 頻率前 100 的新 token 連 Transformer 也變好（-0.010），U-Delta-rawFFN+λlr1000 -0.018、U-Delta-rawFFN -0.028。
 - **讀出端的修改都沒有擋掉干擾**：截到 65–128 後新 token 還是變好：UD2 -0.013、UD2-scale -0.013、UD2-gate -0.016、UD2-gate-norm -0.010、UD2-gate-q32 -0.014、UD2-gate-q128 -0.009、UD2-gate-norm-q32 -0.004（Transformer +0.011）；兩個一起的 UD2-gate-norm-q32 最小，但還沒變成正的；再加旋轉相對位置的 UD2-gate-norm-q32-rope -0.006、UD2-gate-norm-q128-rope -0.009、多 head 的 UD2-gate-norm-h4q8 -0.007、除以記憶量的 UD2-gate-mass-q32 -0.004 也一樣。這些修改整體都更好，但不是因為干擾變少。位置 ≥ 128、頻率前 100 的新 token，UD2-gate 比 Transformer 差 0.024，UD2 打平（差 0.001）。
+- **42M 沒有這種干擾**：截到最近 65–128 個 token，UD2-gate-norm-q32-rope 的新 token 變差 0.007（遠處的價值：U-Delta-rawFFN+λlr1000 +0.007，Transformer +0.014），15M 是變好。遠處前文對新 token 還是 Transformer 用得多；UD2-gate-norm-q32-rope 贏在每個距離的 NLL 都比較低，不是比較會用遠處。
 
 ## 注意
 
