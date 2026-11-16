@@ -1,6 +1,6 @@
 # 統一性實驗報告（FineWeb-Edu，15M / 42M）
 
-截至 2026-11-15。目標是**不含 attention 的統一 block**（同一組格子同時當 FFN 和上下文記憶），在同樣的資料、步數和學習率下達到同規模 Transformer 的語言建模質量；含 attention 的版本只作對照。主線問題見 [`research_goal.md`](research_goal.md)。結果、主張和主要觀察在 [README](../README.md)。
+截至 2026-11-16。目標是**不含 attention 的統一 block**（同一組格子同時當 FFN 和上下文記憶），在同樣的資料、步數和學習率下達到同規模 Transformer 的語言建模質量；含 attention 的版本只作對照。主線問題見 [`research_goal.md`](research_goal.md)。結果、主張和主要觀察在 [README](../README.md)。
 
 每個變體一份文件（怎麼做的、程式碼在哪、結果、怎麼重現），每個實驗一份文件（問題、怎麼做的、結果表、結論）。
 
