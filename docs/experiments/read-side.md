@@ -25,7 +25,7 @@
 | [UD2-gate-q32](../variants/ud2-gate-q32.md) | 1 | 15.45M | 3.746 | 3.701 | 4.111 | 3.699 | 3.663 |
 | [UD2-gate-norm-q32](../variants/ud2-gate-norm-q32.md) | 1 | 15.46M | 3.727 | 3.683 | 4.120 | 3.678 | 3.645 |
 | [UD2-gate-q128](../variants/ud2-gate-q128.md) | 1 | 15.45M | 3.760 | 3.715 | 4.130 | 3.713 | 3.673 |
-| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 1 | 15.46M | 3.716 | 3.671 | 4.104 | 3.668 | 3.632 |
+| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 3 | 15.46M | 3.722（3.716–3.727） | 3.678 | 4.108 | 3.675 | 3.632 |
 | [UD2-gate-norm-q128-rope](../variants/ud2-gate-norm-q128-rope.md) | 1 | 15.45M | 3.732 | 3.688 | 4.122 | 3.684 | 3.651 |
 | [UD2-gate-norm-h4q8](../variants/ud2-gate-norm-h4q8.md) | 1 | 15.46M | 3.732 | 3.688 | 4.124 | 3.683 | 3.654 |
 | [UD2-gate-mass-q32](../variants/ud2-gate-mass-q32.md) | 1 | 15.45M | 3.749 | 3.705 | 4.114 | 3.702 | 3.669 |

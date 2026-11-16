@@ -12,8 +12,8 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 | 模型 | 是什麼 | 15M | 42M | 讀到 20K（15M，16K–20K 段） |
 | --- | --- | ---: | ---: | ---: |
-| [Transformer](docs/variants/transformer.md) | llama2.c 式基線 | 3.945（3 個 seed） | 3.214 | 6.049（完整上下文）/ 3.893（滑動窗口 1,024） |
-| **[UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md)** | 15M、42M 目前最好的統一 block | **3.716** | **3.170**（1 個 seed） | **3.632** |
+| [Transformer](docs/variants/transformer.md) | llama2.c 式基線 | 3.945（3 個 seed） | 3.214（3 個 seed） | 6.049（完整上下文）/ 3.893（滑動窗口 1,024） |
+| **[UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md)** | 15M、42M 目前最好的統一 block | **3.722**（3 個 seed） | **3.171**（3 個 seed） | **3.632** |
 | [UD2-gate](docs/variants/ud2-gate.md) | 15M 有 3 個 seed 的最好統一 block | 3.765（3 個 seed） | 還沒跑 | 3.685 |
 | [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) | U-Delta 系列裡 15M 有 3 個 seed、也有 42M 的 | 3.796（3 個 seed） | 3.223 | 3.713 |
 | [U-Avg](docs/variants/u-avg.md) | 原版統一 block（`model.py`） | 4.112（3 個 seed） | 3.423 | — |
@@ -22,12 +22,12 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 名稱：UD2 = U-Delta-rawFFN+λlr1000 再把寫入目標錨在 FFN 實際的輸出（代號 `SDula`），是 2026-11-15 起的基底；之後的變體用“UD2-後綴”，後綴依序表示讀出端的修改：gate＝每個 token 的讀出門，scale＝每層一個固定縮放，norm＝讀出先 RMSNorm，qN＝讀位址加秩 N 的修正，rope＝記憶裡的旋轉相對位置。
 
-從原版到現在（15M）：[U-Avg](docs/variants/u-avg.md) 4.112 → 記憶改用 delta rule（[U-Delta](docs/variants/u-delta.md)）3.898 → FFN 那一半讀未歸一化的位址（[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)）3.812 → 遺忘率學快 1,000 倍（[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)）3.796 → 寫入目標改錨在 FFN 實際的輸出 μz（[UD2](docs/variants/ud2.md)）3.778 → 記憶讀出加每個 token 一個門（[UD2-gate](docs/variants/ud2-gate.md)）3.765（3 個 seed）→ 讀出先 RMSNorm、讀位址加秩 32 的修正（[UD2-gate-norm-q32](docs/variants/ud2-gate-norm-q32.md)）3.727 → 一半格子加旋轉相對位置（[UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md)）3.716（UD2 和後兩步各 1 個 seed）；最後一個的 42M 是 3.170，贏 Transformer 42M 0.044（1 個 seed）。
+從原版到現在（15M）：[U-Avg](docs/variants/u-avg.md) 4.112 → 記憶改用 delta rule（[U-Delta](docs/variants/u-delta.md)）3.898 → FFN 那一半讀未歸一化的位址（[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md)）3.812 → 遺忘率學快 1,000 倍（[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md)）3.796 → 寫入目標改錨在 FFN 實際的輸出 μz（[UD2](docs/variants/ud2.md)）3.778 → 記憶讀出加每個 token 一個門（[UD2-gate](docs/variants/ud2-gate.md)）3.765（3 個 seed）→ 讀出先 RMSNorm、讀位址加秩 32 的修正（[UD2-gate-norm-q32](docs/variants/ud2-gate-norm-q32.md)）3.727 → 一半格子加旋轉相對位置（[UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md)）3.722（3 個 seed；UD2 和中間兩步各 1 個 seed）；最後一個的 42M 是 3.171（3 個 seed），贏 Transformer 42M 0.044（3 個 seed）。
 
 ### 主張
 
 1. **15M：統一 block 贏 Transformer，三個 seed 都贏。** 3.796 對 3.945；同 seed 配對每組差 -0.161 到 -0.134，最差的統一 block seed 也比最好的 Transformer seed 好 0.128。要打折扣：15M 的 Transformer 不太會用前文（64–128 段到 512–1,024 段只降 0.064），這一點到 42M 消失。逐 token 看，15M 贏的 88.9% 來自照抄前文就猜得到的 token（Transformer 2.017 對 1.416）。見[規模](docs/experiments/scale.md)、[多 seed](docs/experiments/seeds.md)、[逐 token 差距](docs/experiments/token-gap.md)。
-2. **42M：讀出端改好的統一 block 贏 Transformer 0.044，但只有 1 個 seed。** [UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md) 3.170 對 Transformer 3.214，每一段位置都贏 0.038–0.045，前 64 個 token 也贏；長度 4,096 是 3.121（Transformer 過了訓練長度升到 4.871）。要打折扣：兩邊各 1 個 seed（15M Transformer 的 seed 標準差 0.016）；這個模型是在 15M、同一個 seed 從十個讀出端變體裡挑出來的；學習率都沒調。逐 token 看每一類都贏：全部 -0.045，贏的 52.2% 來自窗口裡見過的 token（-0.065），沒出現過的新 token 也從輸變贏（-0.031）；讀到 20K 的 16K–20K 是 3.087（滑動窗口的 Transformer 3.142）。之前的 [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) 42M 3.223 輸 0.009；[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) 輸 0.014。U-Delta-rawFFN+λlr1000 開頭 64 個 token 還略贏，之後每段輸 0.009–0.012；逐 token 看，差距全在窗口裡沒出現過的新 token（+0.020），照抄前文反而略贏。15M 的大幅領先（0.149）它在 42M 沒有保住。讀到 20K 追平滑動窗口的 Transformer（16K–20K 3.142 對 3.142）。見[規模](docs/experiments/scale.md)、[外推](docs/experiments/extrapolation.md)。
+2. **42M：讀出端改好的統一 block 贏 Transformer 0.044，三個 seed 都贏。** [UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md) 三個 seed 3.171 ± 0.005（3.170 / 3.176 / 3.166）對 Transformer 三個 seed 3.214 ± 0.0003；同 seed 配對差 -0.044、-0.038、-0.048，每個 seed 每一段位置都贏，最差的統一 block seed 也比最好的 Transformer seed 低 0.038；長度 4,096 是 3.122（Transformer 過了訓練長度升到 4.871）。贏的原因不是旋轉相對位置：拿掉它的 UD2-gate-norm-q32 42M 是 3.172，只差 0.002（1 個 seed）。要打折扣：這個模型是在 15M、seed 1337 上從十個讀出端變體裡挑出來的，seed 1338、1339 是確認用；學習率兩邊都沒調。下面的逐 token 和讀到 20K 是 seed 1337。逐 token 看每一類都贏：全部 -0.045，贏的 52.2% 來自窗口裡見過的 token（-0.065），沒出現過的新 token 也從輸變贏（-0.031）；讀到 20K 的 16K–20K 是 3.087（滑動窗口的 Transformer 3.142）。之前的 [U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) 42M 3.223 輸 0.009；[U-Delta-rawFFN](docs/variants/u-delta-rawffn.md) 輸 0.014。U-Delta-rawFFN+λlr1000 開頭 64 個 token 還略贏，之後每段輸 0.009–0.012；逐 token 看，差距全在窗口裡沒出現過的新 token（+0.020），照抄前文反而略贏。15M 的大幅領先（0.149）它在 42M 沒有保住。讀到 20K 追平滑動窗口的 Transformer（16K–20K 3.142 對 3.142）。見[規模](docs/experiments/scale.md)、[外推](docs/experiments/extrapolation.md)。
 3. **過了訓練長度不會崩。** 訓練長度 1,024、讀到 20,480 時，統一 block 的 16K–20K 段在 3.7–4.0（15M）；完整上下文的 Transformer 升到 5.999–6.088，只有推理時開滑動窗口才穩。見[外推](docs/experiments/extrapolation.md)。
 4. **比原版好 0.316，最大的一步是記憶的寫法。** 把格子裡的累計平均換成以 FFN 為錨的 delta rule 就好 0.214，見[記憶的寫法](docs/experiments/write-rule.md)；FFN 讀未歸一化位址再好 0.086，見 [FFN 讀哪個位址](docs/experiments/ffn-address.md)。
 5. **還沒證明的：共享位址不吃虧。** 在原版上，靜態和記憶格子分開位址（Split）比共享好 0.074，但多 16% 參數；U-Delta 系列還沒做這個對照。見[統一的對照](docs/experiments/unification.md)。
@@ -41,7 +41,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 - **讀到 20K**（16K–20K 段）：3.087；滑動窗口的 Transformer 3.142，U-Delta-rawFFN+λlr1000 3.142，完整上下文的 Transformer 6.251。包括 Transformer 在內，所有模型在 2K–8K 都先升一點再降回來，所以那個起伏來自文本，不是模型。見[外推](docs/experiments/extrapolation.md)。
 - **每個格子記多久**（按寫入量加權、只算衰減，過了 256 個 token 還留下的寫入量，第 0 → 15 層）：3% / 22% / 19% / 0% / 0% / 1% / 1% / 1% / 0% / 1% / 24% / 12% / 34% / 27% / 10% / 8%。只有第 1–2 層、第 10–13 層和最後兩層留得住，其他層約 0；跟 15M 一樣，少數層慢、其他層很快忘。見[每個格子記多久](docs/experiments/slot-retention.md)。
 - **讀出**：慢的第 1 層，原始讀出從位置 0–64 的 2.3 長到 256 之後的 4.6，經過 RMSNorm 的輸出一直在 1.0 左右（0.95 → 1.03）：記憶越寫越滿造成的增長被 norm 吸收掉。各類 token 的門值差別不大，多數層相差 0.3 以內。
-- **要打折扣**：逐 token 和截前文只用 128 個窗口；每個模型 1 個 seed；這個模型是在 15M 從十個讀出端變體裡挑出來的。
+- **要打折扣**：逐 token 和截前文只用 128 個窗口，都是 seed 1337；這個模型是在 15M 從十個讀出端變體裡挑出來的。
 
 ### 主要觀察
 
@@ -75,7 +75,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | [UD2-gate-q32](docs/variants/ud2-gate-q32.md) | UD2-gate 的讀位址加一個秩 32 的修正，讓讀和寫的比對不對稱；hidden_dim 降到 662 對齊參數。 | 3.746 |
 | [UD2-gate-norm-q32](docs/variants/ud2-gate-norm-q32.md) | UD2-gate-norm 和 UD2-gate-q32 合在一起：讀出先 RMSNorm，讀位址加秩 32 的修正。 | 3.727 |
 | [UD2-gate-q128](docs/variants/ud2-gate-q128.md) | UD2-gate-q32 的讀位址修正從秩 32 加到 128；hidden_dim 降到 538 對齊參數（格子少 19%）。 | 3.760 |
-| [UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md) | UD2-gate-norm-q32 的一半格子兩兩成對旋轉（週期 4–256 個 token），讓記憶的比對看相對距離；不加參數。 | 3.716 |
+| [UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md) | UD2-gate-norm-q32 的一半格子兩兩成對旋轉（週期 4–256 個 token），讓記憶的比對看相對距離；不加參數。 | 3.722（3 個 seed，3.716–3.727） |
 | [UD2-gate-norm-q128-rope](docs/variants/ud2-gate-norm-q128-rope.md) | 三個讀出端的修改一起：讀出 RMSNorm、秩 128 的讀位址修正、一半格子加旋轉相對位置；hidden_dim 538。 | 3.732 |
 | [UD2-gate-norm-h4q8](docs/variants/ud2-gate-norm-h4q8.md) | UD2-gate-norm-q32 的讀出拆成 4 個 head，每個 head 有自己秩 8 的讀位址修正、各自 RMSNorm；參數一樣。 | 3.732 |
 | [UD2-gate-mass-q32](docs/variants/ud2-gate-mass-q32.md) | UD2-gate-q32 的讀出除以位址碰到的記憶量（像 softmax 的分母）。 | 3.749 |

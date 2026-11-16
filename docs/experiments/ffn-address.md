@@ -26,7 +26,7 @@
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | [U-Delta](../variants/u-delta.md) | 1 | 41.77M | 3.350 | 3.303 | 3.757 | 3.299 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 1 | 41.77M | 3.228 | 3.183 | 3.623 | 3.179 |
-| [Transformer](../variants/transformer.md) | 1 | 41.69M | 3.214 | 4.871 | 3.628 | 3.164 |
+| [Transformer](../variants/transformer.md) | 3 | 41.69M | 3.214（3.214–3.215） | 4.860 | 3.627 | 3.164 |
 
 ### 42M 按位置
 
@@ -34,7 +34,7 @@
 | --- | ---: | ---: | ---: | ---: | ---: |
 | [U-Delta](../variants/u-delta.md) | 3.757 | 3.437 | 3.369 | 3.317 | 3.299 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 3.623 | 3.307 | 3.245 | 3.196 | 3.179 |
-| [Transformer](../variants/transformer.md) | 3.628 | 3.293 | 3.233 | 3.182 | 3.164 |
+| [Transformer](../variants/transformer.md) | 3.627 | 3.294 | 3.233 | 3.182 | 3.164 |
 | U-Delta-rawFFN − U-Delta | -0.134 | -0.130 | -0.124 | -0.121 | -0.120 |
 
 ## 結論
