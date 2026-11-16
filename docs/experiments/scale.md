@@ -17,8 +17,8 @@
 
 | 模型 | 15M | 42M | 110M |
 | --- | ---: | ---: | ---: |
-| [Transformer](../variants/transformer.md) | 3.945（3 個 seed，3.928–3.957） | 3.214 | 2.822 |
-| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 3.716 | 3.170 | — |
+| [Transformer](../variants/transformer.md) | 3.945（3 個 seed，3.928–3.957） | 3.214（3 個 seed，3.214–3.215） | 2.822 |
+| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 3.722（3 個 seed，3.716–3.727） | 3.171（3 個 seed，3.166–3.176） | — |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3.796（3 個 seed，3.793–3.799） | 3.223 | — |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 3.812 | 3.228 | — |
 | [U-Delta](../variants/u-delta.md) | 3.898（3 個 seed，3.895–3.901） | 3.350 | — |
@@ -31,12 +31,12 @@
 
 | 模型 | 0–64 | 64–128 | 128–256 | 256–512 | 512–1024 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| [Transformer](../variants/transformer.md) | 3.628 | 3.293 | 3.233 | 3.182 | 3.164 |
-| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 3.584 | 3.255 | 3.189 | 3.139 | 3.118 |
+| [Transformer](../variants/transformer.md) | 3.627 | 3.294 | 3.233 | 3.182 | 3.164 |
+| [UD2-gate-norm-q32-rope](../variants/ud2-gate-norm-q32-rope.md) | 3.584 | 3.255 | 3.191 | 3.139 | 3.119 |
 | [U-Delta-rawFFN+λlr1000](../variants/u-delta-rawffn-lambda-lr1000.md) | 3.624 | 3.305 | 3.241 | 3.193 | 3.174 |
 | [U-Delta-rawFFN](../variants/u-delta-rawffn.md) | 3.623 | 3.307 | 3.245 | 3.196 | 3.179 |
 | [U-Delta](../variants/u-delta.md) | 3.757 | 3.437 | 3.369 | 3.317 | 3.299 |
-| U-Delta-rawFFN+λlr1000 − Transformer | -0.005 | +0.012 | +0.009 | +0.010 | +0.011 |
+| U-Delta-rawFFN+λlr1000 − Transformer | -0.004 | +0.011 | +0.008 | +0.010 | +0.010 |
 
 ### 15M 按位置（長度 1,024，各 3 個 seed 平均）
 
