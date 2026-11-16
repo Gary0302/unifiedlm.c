@@ -4,7 +4,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 研究目标见 [`docs/research_goal.md`](docs/research_goal.md)，各规模的设置与训练命令见 [`docs/models.md`](docs/models.md)。
 
-## 當前進展（統一性實驗，截至 2026-11-15）
+## 當前進展（統一性實驗，截至 2026-11-16）
 
 目標：**不含 attention 的統一 block**——同一組格子同時當 FFN 和上下文記憶——在同樣的資料、步數和學習率下，達到同規模 Transformer 的語言建模質量。FineWeb-Edu，Llama 2 32K 詞表，所有模型用同一個學習率 5e-4，沒有調參。完整報告（設定、全部結果表）見 [`docs/experiments.md`](docs/experiments.md)。
 
@@ -31,6 +31,17 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 3. **過了訓練長度不會崩。** 訓練長度 1,024、讀到 20,480 時，統一 block 的 16K–20K 段在 3.7–4.0（15M）；完整上下文的 Transformer 升到 5.999–6.088，只有推理時開滑動窗口才穩。見[外推](docs/experiments/extrapolation.md)。
 4. **比原版好 0.316，最大的一步是記憶的寫法。** 把格子裡的累計平均換成以 FFN 為錨的 delta rule 就好 0.214，見[記憶的寫法](docs/experiments/write-rule.md)；FFN 讀未歸一化位址再好 0.086，見 [FFN 讀哪個位址](docs/experiments/ffn-address.md)。
 5. **還沒證明的：共享位址不吃虧。** 在原版上，靜態和記憶格子分開位址（Split）比共享好 0.074，但多 16% 參數；U-Delta 系列還沒做這個對照。見[統一的對照](docs/experiments/unification.md)。
+
+### 42M 診斷：UD2-gate-norm-q32-rope 贏在哪裡
+
+**結論：0.044 是全面的贏。** 每一類 token 都贏 Transformer，最大一份來自窗口裡見過的 token；[U-Delta-rawFFN+λlr1000](docs/variants/u-delta-rawffn-lambda-lr1000.md) 42M 輸掉的位置 64 之後的新 token，到這裡也變成贏。但新 token 變好，是因為每種上下文長度都猜得更準，不是遠處的前文用得更好。下面的數字是減掉 Transformer 42M，128 個窗口，括號裡是 U-Delta-rawFFN+λlr1000 42M。
+
+- **逐 token**：全部 -0.045（+0.005）；照抄前文就猜得到的 -0.038（-0.005）；窗口裡見過的 -0.065（-0.008）；沒出現過的新 token -0.031（+0.020）；其中位置 64–256 的新 token -0.021（+0.025）；256–1,024 的新 token -0.033（+0.022）。贏的 52.2% 來自見過的 token。見[逐 token 差距](docs/experiments/token-gap.md)。
+- **遠處前文值多少**（把前文截到最近 65–128 個 token，NLL 升多少；Transformer 對 UD2-gate-norm-q32-rope）：全部 +0.146 對 +0.150；照抄 +0.499 對 +0.507；見過 +0.087 對 +0.100；新 token +0.014 對 +0.007。重複的內容，它從遠處拿到的比 Transformer 多一點；新 token 則是 Transformer 從遠處拿得多，但截掉遠處之後它仍然贏（4.665 對 4.702）。15M 時遠處前文反而讓新 token 變差（截掉遠處反而好 0.006），42M 變成有幫助（截掉遠處變差 0.007）。見[遠處前文值多少](docs/experiments/reach.md)。
+- **讀到 20K**（16K–20K 段）：3.087；滑動窗口的 Transformer 3.142，U-Delta-rawFFN+λlr1000 3.142，完整上下文的 Transformer 6.251。包括 Transformer 在內，所有模型在 2K–8K 都先升一點再降回來，所以那個起伏來自文本，不是模型。見[外推](docs/experiments/extrapolation.md)。
+- **每個格子記多久**（按寫入量加權、只算衰減，過了 256 個 token 還留下的寫入量，第 0 → 15 層）：3% / 22% / 19% / 0% / 0% / 1% / 1% / 1% / 0% / 1% / 24% / 12% / 34% / 27% / 10% / 8%。只有第 1–2 層、第 10–13 層和最後兩層留得住，其他層約 0；跟 15M 一樣，少數層慢、其他層很快忘。見[每個格子記多久](docs/experiments/slot-retention.md)。
+- **讀出**：慢的第 1 層，原始讀出從位置 0–64 的 2.3 長到 256 之後的 4.6，經過 RMSNorm 的輸出一直在 1.0 左右（0.95 → 1.03）：記憶越寫越滿造成的增長被 norm 吸收掉。各類 token 的門值差別不大，多數層相差 0.3 以內。
+- **要打折扣**：逐 token 和截前文只用 128 個窗口；每個模型 1 個 seed；這個模型是在 15M 從十個讀出端變體裡挑出來的。
 
 ### 主要觀察
 
