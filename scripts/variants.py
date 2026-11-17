@@ -370,6 +370,15 @@ def install(variant, m_s=0, m_f=0):
     elif variant == "UD2-gate-norm-q32-rope":  # SDulagnq (UD2-gate-norm-q32) with rotary relative position in half the memory
         import delta
         model.UnifiedBlock = delta.RopeReadNormQueryGateAnchorDeltaBlock
+    elif variant == "UD2-gate-norm-q32-ropelo":  # UD2-gate-norm-q32-rope with rope in the lower half of the blocks only
+        import delta
+        i = itertools.count()   # every model builds n_layers blocks, so the index modulo n_layers is the block's depth
+        model.UnifiedBlock = lambda args: (delta.RopeReadNormQueryGateAnchorDeltaBlock if next(i) % args.n_layers < args.n_layers // 2
+                                           else delta.ReadNormQueryGateAnchorDeltaBlock)(args)
+    elif variant == "UD2-gate-norm-q32-rope-ev":  # UD2-gate-norm-q32-rope with the token embedding in the write value
+        import delta
+        model.UnifiedBlock = delta.EmbedValueRopeReadNormQueryGateAnchorDeltaBlock
+        model.UnifiedLM.forward = delta.embed_value_forward
     elif variant == "UD2-gate-norm-q128-rope":  # UD2-gate-norm-q32-rope with the read-address correction at rank 128
         import delta
         model.UnifiedBlock = delta.RopeReadNormQuery128GateAnchorDeltaBlock

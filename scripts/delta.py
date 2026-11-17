@@ -395,6 +395,47 @@ class RopeReadNormQueryGateAnchorDeltaBlock(RopeMemoryMixin, ReadNormQueryGateAn
     """UD2-gate-norm-q32-rope: UD2-gate-norm-q32 (SDulagnq) with rotary relative position on half its memory slots."""
 
 
+class EmbedValueRopeReadNormQueryGateAnchorDeltaBlock(RopeReadNormQueryGateAnchorDeltaBlock):
+    """UD2-gate-norm-q32-rope-ev: the memory's write value also carries the current token's input embedding,
+    v_t = W_v (h_t + g * e_t), e_t the token embedding RMS-normalised, so every block can store the exact token that
+    followed its write key (copying needs which token, a deep block's h_t holds its own view of it). g is a learned
+    gain per channel, started at 0 (the block starts as UD2-gate-norm-q32-rope): dim parameters per block. The
+    embedding comes from UnifiedLM.forward, replaced by embed_value_forward. Else as in UD2-gate-norm-q32-rope."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.ev_gain = nn.Parameter(torch.zeros(args.dim))
+
+    def forward(self, x, e):
+        h = self.norm(x)
+        u = self.conv(h.transpose(1, 2))[..., : h.size(1)].transpose(1, 2)
+        s, v = self.key(u), self.val(h + self.ev_gain * e)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            z = F.relu(_hi(s)).square()
+            r, v = z / (self.log_eps.clamp(-10, 10).exp() + z.sum(-1, keepdim=True)), _hi(v)
+            k = F.pad(r[:, :-1], (0, 0, 1, 0))
+            target = v - F.linear(F.pad(z[:, :-1], (0, 0, 1, 0)), _hi(self.mu.weight))
+            beta = torch.sigmoid(_lin(self.beta, h)).squeeze(-1)
+            fast = self.read_out(self.memory(_unit(k), target, beta, self.log_decay(r), self.query(r, s, u)), h)
+        return x + self.dropout(self.mu(z.type_as(x)) + fast.type_as(x))
+
+
+def embed_value_forward(self, tokens, targets=None):
+    """UnifiedLM.forward with the RMS-normalised token embedding passed to every -ev block (other blocks as usual)."""
+    h = self.dropout(self.tok_embeddings(tokens))
+    e = h * torch.rsqrt(h.square().mean(-1, keepdim=True) + 1e-6)
+    for layer in self.layers:
+        h = layer(h, e) if isinstance(layer, EmbedValueRopeReadNormQueryGateAnchorDeltaBlock) else layer(h)
+    h = self.norm(h)
+    if targets is not None:
+        logits = self.output(h)
+        self.last_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+    else:
+        logits = self.output(h[:, [-1], :])
+        self.last_loss = None
+    return logits
+
+
 class MultiHeadReadNormGateAnchorDeltaBlock(ReadNormGateAnchorDeltaBlock):
     """UD2-gate-norm-h4q8: UD2-gate-norm-q32 with its read split into heads. The value width is split into `heads`
     groups and each head reads its group with an address of its own, q_h = unit(relu(K u + b + U_h V_h u)^2) at rank
