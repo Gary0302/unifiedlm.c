@@ -4726,5 +4726,449 @@
     }
    }
   ]
+ },
+ "ud2_gate_norm_q32_decay_ev_15m": {
+  "variant": "UD2-gate-norm-q32-decay-ev",
+  "windows": 32,
+  "layers": [
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 546,
+     "write_share_keep": 0.4500087958610577,
+     "mass_surviving": 0.43588471835225256
+    },
+    "64": {
+     "slots_keep": 539,
+     "write_share_keep": 0.430738794212728,
+     "mass_surviving": 0.3807797847447276
+    },
+    "256": {
+     "slots_keep": 505,
+     "write_share_keep": 0.3618384888808948,
+     "mass_surviving": 0.2758429038595176
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 513,
+     "write_share_keep": 0.5019824890901211,
+     "mass_surviving": 0.43759278936285456
+    },
+    "64": {
+     "slots_keep": 396,
+     "write_share_keep": 0.30514402106262306,
+     "mass_surviving": 0.2634426509302338
+    },
+    "256": {
+     "slots_keep": 287,
+     "write_share_keep": 0.18056230623139444,
+     "mass_surviving": 0.14920748131293293
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 482,
+     "write_share_keep": 0.04447248536763635,
+     "mass_surviving": 0.1474775946505714
+    },
+    "64": {
+     "slots_keep": 367,
+     "write_share_keep": 0.026741354119854975,
+     "mass_surviving": 0.023176207086817294
+    },
+    "256": {
+     "slots_keep": 252,
+     "write_share_keep": 0.014449799960516128,
+     "mass_surviving": 0.012107261446669449
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 536,
+     "write_share_keep": 0.680061923211968,
+     "mass_surviving": 0.5884612152191623
+    },
+    "64": {
+     "slots_keep": 384,
+     "write_share_keep": 0.40725360543635897,
+     "mass_surviving": 0.3658424197090389
+    },
+    "256": {
+     "slots_keep": 260,
+     "write_share_keep": 0.2470287818573341,
+     "mass_surviving": 0.20504699454734465
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 515,
+     "write_share_keep": 0.5953738766789983,
+     "mass_surviving": 0.5193298786885523
+    },
+    "64": {
+     "slots_keep": 388,
+     "write_share_keep": 0.39992373305449086,
+     "mass_surviving": 0.34391650278504177
+    },
+    "256": {
+     "slots_keep": 254,
+     "write_share_keep": 0.2278337010336429,
+     "mass_surviving": 0.19780963088423398
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 478,
+     "write_share_keep": 0.13983498601005837,
+     "mass_surviving": 0.2711757001042616
+    },
+    "64": {
+     "slots_keep": 363,
+     "write_share_keep": 0.08421313810648554,
+     "mass_surviving": 0.07763422447792645
+    },
+    "256": {
+     "slots_keep": 252,
+     "write_share_keep": 0.04597636305718085,
+     "mass_surviving": 0.0393430482806575
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 609,
+     "write_share_keep": 0.900888011065195,
+     "mass_surviving": 0.8421606580510498
+    },
+    "64": {
+     "slots_keep": 567,
+     "write_share_keep": 0.8055818793538299,
+     "mass_surviving": 0.7077871069952035
+    },
+    "256": {
+     "slots_keep": 472,
+     "write_share_keep": 0.6342601683787036,
+     "mass_surviving": 0.49462284418038066
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 497,
+     "write_share_keep": 0.8344470915875587,
+     "mass_surviving": 0.6536060668612113
+    },
+    "64": {
+     "slots_keep": 367,
+     "write_share_keep": 0.13962890043943044,
+     "mass_surviving": 0.31169015771364417
+    },
+    "256": {
+     "slots_keep": 258,
+     "write_share_keep": 0.08474307721442234,
+     "mass_surviving": 0.07770716910102175
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 613,
+     "write_share_keep": 0.7304377456658047,
+     "mass_surviving": 0.698906451970025
+    },
+    "64": {
+     "slots_keep": 581,
+     "write_share_keep": 0.6502622737767264,
+     "mass_surviving": 0.5765559229914761
+    },
+    "256": {
+     "slots_keep": 531,
+     "write_share_keep": 0.53579269472495,
+     "mass_surviving": 0.43278968516978206
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 622,
+     "write_share_keep": 0.9105763307495116,
+     "mass_surviving": 0.8284549584036557
+    },
+    "64": {
+     "slots_keep": 563,
+     "write_share_keep": 0.7518583466085633,
+     "mass_surviving": 0.6830314198589
+    },
+    "256": {
+     "slots_keep": 505,
+     "write_share_keep": 0.6300655338432747,
+     "mass_surviving": 0.5179987498375586
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 569,
+     "write_share_keep": 0.7752235916478785,
+     "mass_surviving": 0.6952404053425569
+    },
+    "64": {
+     "slots_keep": 516,
+     "write_share_keep": 0.621728553847195,
+     "mass_surviving": 0.5117133948579402
+    },
+    "256": {
+     "slots_keep": 338,
+     "write_share_keep": 0.34762119990285867,
+     "mass_surviving": 0.2878000164865985
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 501,
+     "write_share_keep": 0.6834978762257593,
+     "mass_surviving": 0.6517568022573369
+    },
+    "64": {
+     "slots_keep": 442,
+     "write_share_keep": 0.5924607788084028,
+     "mass_surviving": 0.5224553517873254
+    },
+    "256": {
+     "slots_keep": 369,
+     "write_share_keep": 0.4638655722520191,
+     "mass_surviving": 0.37045294772743514
+    }
+   }
+  ]
+ },
+ "ud2_gate_norm_q32_decay_half_15m": {
+  "variant": "UD2-gate-norm-q32-decay-half",
+  "windows": 32,
+  "layers": [
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 597,
+     "write_share_keep": 0.4828669795348105,
+     "mass_surviving": 0.46844830229798073
+    },
+    "64": {
+     "slots_keep": 590,
+     "write_share_keep": 0.46230419839036735,
+     "mass_surviving": 0.40933827380065724
+    },
+    "256": {
+     "slots_keep": 560,
+     "write_share_keep": 0.3893623415933815,
+     "mass_surviving": 0.301969240693751
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 484,
+     "write_share_keep": 0.5021990987306136,
+     "mass_surviving": 0.43081140409448665
+    },
+    "64": {
+     "slots_keep": 401,
+     "write_share_keep": 0.32827326538394414,
+     "mass_surviving": 0.28782982304897725
+    },
+    "256": {
+     "slots_keep": 307,
+     "write_share_keep": 0.2153245441821329,
+     "mass_surviving": 0.17469676449137525
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 276,
+     "write_share_keep": 0.06461638269024864,
+     "mass_surviving": 0.07773817622832384
+    },
+    "64": {
+     "slots_keep": 199,
+     "write_share_keep": 0.031673029859080416,
+     "mass_surviving": 0.028582341912115356
+    },
+    "256": {
+     "slots_keep": 131,
+     "write_share_keep": 0.013061021987477812,
+     "mass_surviving": 0.011790918067396215
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 373,
+     "write_share_keep": 0.4574246086011986,
+     "mass_surviving": 0.3805357857167444
+    },
+    "64": {
+     "slots_keep": 235,
+     "write_share_keep": 0.22033337678082893,
+     "mass_surviving": 0.20744798354353944
+    },
+    "256": {
+     "slots_keep": 147,
+     "write_share_keep": 0.1289295496405615,
+     "mass_surviving": 0.10778958901505178
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 261,
+     "write_share_keep": 0.10974248077996017,
+     "mass_surviving": 0.0974317589087732
+    },
+    "64": {
+     "slots_keep": 190,
+     "write_share_keep": 0.06431591504410324,
+     "mass_surviving": 0.056297253126499365
+    },
+    "256": {
+     "slots_keep": 128,
+     "write_share_keep": 0.035439107483679844,
+     "mass_surviving": 0.030262758415374614
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 269,
+     "write_share_keep": 0.1142390908082195,
+     "mass_surviving": 0.22629254601765444
+    },
+    "64": {
+     "slots_keep": 191,
+     "write_share_keep": 0.06264522399884134,
+     "mass_surviving": 0.058801946227681756
+    },
+    "256": {
+     "slots_keep": 126,
+     "write_share_keep": 0.027252614423967557,
+     "mass_surviving": 0.0250765132677063
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 540,
+     "write_share_keep": 0.7820066392555075,
+     "mass_surviving": 0.7394072388966785
+    },
+    "64": {
+     "slots_keep": 514,
+     "write_share_keep": 0.704856302829267,
+     "mass_surviving": 0.6417341279198705
+    },
+    "256": {
+     "slots_keep": 460,
+     "write_share_keep": 0.6079376496688924,
+     "mass_surviving": 0.47742547159772464
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 434,
+     "write_share_keep": 0.5683092977819202,
+     "mass_surviving": 0.4705795870392723
+    },
+    "64": {
+     "slots_keep": 281,
+     "write_share_keep": 0.30463614577865245,
+     "mass_surviving": 0.2618436395101522
+    },
+    "256": {
+     "slots_keep": 151,
+     "write_share_keep": 0.12994812887123655,
+     "mass_surviving": 0.11813290009136443
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 301,
+     "write_share_keep": 0.509620494826069,
+     "mass_surviving": 0.3273536207170696
+    },
+    "64": {
+     "slots_keep": 201,
+     "write_share_keep": 0.09602233997763689,
+     "mass_surviving": 0.10070590337957036
+    },
+    "256": {
+     "slots_keep": 134,
+     "write_share_keep": 0.046804330625657795,
+     "mass_surviving": 0.04102143201114692
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 568,
+     "write_share_keep": 0.8134260910515031,
+     "mass_surviving": 0.7493436166347784
+    },
+    "64": {
+     "slots_keep": 521,
+     "write_share_keep": 0.6740269341531505,
+     "mass_surviving": 0.6121519592919352
+    },
+    "256": {
+     "slots_keep": 477,
+     "write_share_keep": 0.5771534238129543,
+     "mass_surviving": 0.4449018904696115
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 525,
+     "write_share_keep": 0.6209446559191887,
+     "mass_surviving": 0.591133157425682
+    },
+    "64": {
+     "slots_keep": 503,
+     "write_share_keep": 0.5741783236584345,
+     "mass_surviving": 0.49955816134771136
+    },
+    "256": {
+     "slots_keep": 453,
+     "write_share_keep": 0.4557426899221044,
+     "mass_surviving": 0.3674440913960643
+    }
+   },
+   {
+    "slots": 662,
+    "16": {
+     "slots_keep": 355,
+     "write_share_keep": 0.5027630068117523,
+     "mass_surviving": 0.48480713346507465
+    },
+    "64": {
+     "slots_keep": 334,
+     "write_share_keep": 0.4713719163243849,
+     "mass_surviving": 0.42525104831954974
+    },
+    "256": {
+     "slots_keep": 282,
+     "write_share_keep": 0.39101586991812043,
+     "mass_surviving": 0.33790724789201937
+    }
+   }
+  ]
  }
 }
