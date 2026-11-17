@@ -379,6 +379,29 @@ def install(variant, m_s=0, m_f=0):
         import delta
         model.UnifiedBlock = delta.EmbedValueRopeReadNormQueryGateAnchorDeltaBlock
         model.UnifiedLM.forward = delta.embed_value_forward
+    elif variant == "UD2-gate-norm-q32-ev":  # UD2-gate-norm-q32 (no rope) with -rope-ev's token embedding in the write value
+        import delta
+        model.UnifiedBlock = delta.EmbedValueReadNormQueryGateAnchorDeltaBlock
+        model.UnifiedLM.forward = delta.embed_value_forward
+    elif variant == "UD2-gate-norm-q32-ropelo-ev":  # -ropelo with the -ev write value in every block
+        import delta
+        i = itertools.count()   # as -ropelo: the index modulo n_layers is the block's depth
+        model.UnifiedBlock = lambda args: (delta.EmbedValueRopeReadNormQueryGateAnchorDeltaBlock if next(i) % args.n_layers < args.n_layers // 2
+                                           else delta.EmbedValueReadNormQueryGateAnchorDeltaBlock)(args)
+        model.UnifiedLM.forward = delta.embed_value_forward
+    elif variant == "UD2-gate-norm-q32-decay":  # UD2-gate-norm-q32 with fixed per-slot half-lives 2..8192 and a bounded gate
+        import delta
+        model.UnifiedBlock = delta.SpectrumReadNormQueryGateAnchorDeltaBlock
+    elif variant == "UD2-gate-norm-q32-decay-ev":  # UD2-gate-norm-q32-decay with the -ev write value
+        import delta
+        model.UnifiedBlock = delta.EmbedValueSpectrumReadNormQueryGateAnchorDeltaBlock
+        model.UnifiedLM.forward = delta.embed_value_forward
+    elif variant == "UD2-gate-norm-q32-decay-half":  # half the slots as -decay (fixed spectrum), half as the base (learned)
+        import delta
+        model.UnifiedBlock = delta.HalfSpectrumReadNormQueryGateAnchorDeltaBlock
+    elif variant == "UD2-gate-norm-q32-conv8":  # UD2-gate-norm-q32 trained with --conv_size=8 (the flag sets the width)
+        import delta
+        model.UnifiedBlock = delta.ReadNormQueryGateAnchorDeltaBlock
     elif variant == "UD2-gate-norm-q128-rope":  # UD2-gate-norm-q32-rope with the read-address correction at rank 128
         import delta
         model.UnifiedBlock = delta.RopeReadNormQuery128GateAnchorDeltaBlock
