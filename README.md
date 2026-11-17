@@ -4,7 +4,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 
 研究目标见 [`docs/research_goal.md`](docs/research_goal.md)，各规模的设置与训练命令见 [`docs/models.md`](docs/models.md)。
 
-## 當前進展（統一性實驗，截至 2026-11-16）
+## 當前進展（統一性實驗，截至 2026-11-17）
 
 目標：**不含 attention 的統一 block**——同一組格子同時當 FFN 和上下文記憶——在同樣的資料、步數和學習率下，達到同規模 Transformer 的語言建模質量。FineWeb-Edu，Llama 2 32K 詞表，所有模型用同一個學習率 5e-4，沒有調參。完整報告（設定、全部結果表）見 [`docs/experiments.md`](docs/experiments.md)。
 
@@ -50,6 +50,7 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 - **記憶值 0.58，讀前文全靠它。** 把記憶拿掉、從頭訓練的 [U-Delta-rawFFN-nomem](docs/variants/u-delta-rawffn-nomem.md) 是 4.388（U-Delta-rawFFN 3.812），每個位置都一樣，前文完全沒有幫助。推理時關掉記憶 NLL 升 1.5–2.0（高估了作用，模型沒學過沒有記憶的情況）；U-Delta-rawFFN+λlr1000 按格子平均大部分層只記 1–2 個 token，卻比 U-Delta-rawFFN 更依賴記憶。見[拿掉記憶](docs/experiments/memory-ablation.md)。
 - **讀出端是目前最有效的方向。** 每層一個固定的讀出縮放沒有用（[UD2-scale](docs/variants/ud2-scale.md) 3.776，跟 UD2 一樣）；每個 token 的門有用（3 個 seed 都好）；讀出先 RMSNorm 讓後面的位置變好（[UD2-gate-norm](docs/variants/ud2-gate-norm.md) 3.739，512–1,024 好 0.030、前 64 個 token 打平）；讀位址加秩 32 的修正補最多的是位置 64–256 的新 token（[UD2-gate-q32](docs/variants/ud2-gate-q32.md) 3.746），加到秩 128（格子跟著變少）反而變差（[UD2-gate-q128](docs/variants/ud2-gate-q128.md) 3.760）；記憶加上旋轉相對位置再好 0.011，進步在新 token（[UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md) 3.716）；讀出拆成多個 head、除以記憶量都沒用。見[讀出端](docs/experiments/read-side.md)。
 - **照抄的能力：短的、遠的抄得比 Transformer 好，長的抄得差；42M 的旋轉相對位置反而讓照抄變差。** 同一段內容出現第二次時的 NLL（64 條序列，seed 1337）：隨機 token 32 個重複一次，42M UD2-gate-norm-q32-rope 2.04、Transformer 3.35（第一次出現約 12.4）；隨機 512 個則是 6.98 對 5.61；一段 128 個 token 的文字隔 768 個 token 再出現，3.20 對 3.36。512 個 token 的原文完全重複，42M 也只從約 3.2 降到約 2.5，所有模型都抄得不好；15M 的 Transformer 完全抄不了隨機 token（12.7 → 11.2）。拿掉旋轉相對位置的 UD2-gate-norm-q32 42M 每一項都抄得更好（隨機 128 個 2.51 對 3.31，原文 512 個 2.391 對 2.535），跟它多兩層留住長記憶一致；整體 NLL 卻差 0.002，旋轉相對位置的好處在別處。各 1 個 seed。腳本 `scripts/fineweb/copyprobe.py`，結果 `scripts/reports/fineweb/copyprobe.json`。
+- **旋轉相對位置的替代，和 embedding 寫入值（15M，各 1 個 seed）。** [UD2-gate-norm-q32-ropelo-ev](docs/variants/ud2-gate-norm-q32-ropelo-ev.md) 3.703；[UD2-gate-norm-q32-rope-ev](docs/variants/ud2-gate-norm-q32-rope-ev.md) 3.707；[UD2-gate-norm-q32-ropelo](docs/variants/ud2-gate-norm-q32-ropelo.md) 3.711；[UD2-gate-norm-q32-decay-ev](docs/variants/ud2-gate-norm-q32-decay-ev.md) 3.712；[UD2-gate-norm-q32-rope](docs/variants/ud2-gate-norm-q32-rope.md) 3.716；[UD2-gate-norm-q32-ev](docs/variants/ud2-gate-norm-q32-ev.md) 3.718；[UD2-gate-norm-q32-decay](docs/variants/ud2-gate-norm-q32-decay.md) 3.721；[UD2-gate-norm-q32-decay-half](docs/variants/ud2-gate-norm-q32-decay-half.md) 3.722；[UD2-gate-norm-q32](docs/variants/ud2-gate-norm-q32.md) 3.727；[UD2-gate-norm-q32-conv8](docs/variants/ud2-gate-norm-q32-conv8.md) 3.728（都是 seed 1337）。旋轉相對位置在 15M 幫的是新 token，卻讓照抄變差；只放下半的 block（ropelo）把照抄補回來。記憶寫入值加 token embedding（ev）在有沒有旋轉相對位置的基底上都好約 0.009，幫的是照抄、見過的 token 和少見的詞，對新 token 沒用；ropelo-ev 兩樣都留住，是 15M 最好的。不用旋轉相對位置、把衰減速率固定成 2–8,192 個 token 的光譜（decay）照抄最好，補回旋轉相對位置約一半的進步，加上 ev 完全疊加。卷積加寬到 8 沒用。42M 時旋轉相對位置放哪裡都一樣（3.170 / 3.171 / 3.172），不加的照抄最好，所以 ropelo-ev 在 15M 的領先到 42M 不一定還在。腳本 `scripts/fineweb/copyprobe.py`，結果 `copyprobe.json`、`tokgap.json`。
 - **單一記憶就夠，不需要第二份慢記憶。** U-Delta+slow 的慢記憶沒學（速率停在初始值）；同容量的兩份快記憶跟一份一樣；單一記憶讓中間層忘快一點就追平它。
 - **內容主要是被遺忘掉的，不是被新寫入覆蓋掉的。** 絕大多數格子覆寫占比不到 1%，遺忘門讓實際遺忘比基礎速率快約 10–35 倍；只有少數常被寫的格子覆寫較重（U-Delta 第 6–9 層按層平均 13–22%）。見[遺忘還是覆寫](docs/experiments/forgetting-vs-overwrite.md)。
 - **記憶偏向寫意外的 token，但很弱。** 寫入量和 token loss 的 Spearman 相關只有 0.14–0.21；模型自己 greedy 生成（幾乎都是預測到的）時寫入量還有真實文字的 0.52–0.74 倍。見[寫入量與 loss](docs/experiments/write-vs-loss.md)。
@@ -80,6 +81,14 @@ UnifiedLM用同一种块同时做 token mixing 和 channel mixing 的语言模�
 | [UD2-gate-norm-q128-rope](docs/variants/ud2-gate-norm-q128-rope.md) | 三個讀出端的修改一起：讀出 RMSNorm、秩 128 的讀位址修正、一半格子加旋轉相對位置；hidden_dim 538。 | 3.732 |
 | [UD2-gate-norm-h4q8](docs/variants/ud2-gate-norm-h4q8.md) | UD2-gate-norm-q32 的讀出拆成 4 個 head，每個 head 有自己秩 8 的讀位址修正、各自 RMSNorm；參數一樣。 | 3.732 |
 | [UD2-gate-mass-q32](docs/variants/ud2-gate-mass-q32.md) | UD2-gate-q32 的讀出除以位址碰到的記憶量（像 softmax 的分母）。 | 3.749 |
+| [UD2-gate-norm-q32-ropelo](docs/variants/ud2-gate-norm-q32-ropelo.md) | UD2-gate-norm-q32-rope 只在下半的 block（15M 12 個裡的 6 個）加旋轉相對位置，上半不加；參數一樣。15M 比全部加好 0.006（1 個 seed），進步在遠處照抄；42M 跟全部加、完全不加一樣（3.171）。 | 3.711 |
+| [UD2-gate-norm-q32-rope-ev](docs/variants/ud2-gate-norm-q32-rope-ev.md) | UD2-gate-norm-q32-rope 的記憶寫入值加上 token embedding：v = W_v(h + g ⊙ e)，e 是 RMSNorm 過的 embedding，g 每個 channel 一個、從 0 開始；多 3,456 個參數。15M 好 0.009（1 個 seed），進步在照抄、見過的 token 和少見的詞。 | 3.707 |
+| [UD2-gate-norm-q32-ev](docs/variants/ud2-gate-norm-q32-ev.md) | 不加旋轉相對位置的 UD2-gate-norm-q32 加上 embedding 寫入值（同 UD2-gate-norm-q32-rope-ev）。15M 好 0.0095（1 個 seed），跟加在有旋轉相對位置的版本上一樣。 | 3.718 |
+| [UD2-gate-norm-q32-ropelo-ev](docs/variants/ud2-gate-norm-q32-ropelo-ev.md) | 旋轉相對位置只放下半的 block，每層都加 embedding 寫入值；兩個進步約八成六疊加。 | 3.703 |
+| [UD2-gate-norm-q32-decay](docs/variants/ud2-gate-norm-q32-decay.md) | 不加旋轉相對位置；每個格子的衰減速率固定不學（buffer），g=1 時半衰期從 2 到 8,192 個 token 等比分佈，門改成 2σ（最多加速 2 倍）。哪些格子還記得就編碼了過了多久，又不會把內容轉掉。參數少 7,944 個。15M 好 0.006（1 個 seed），照抄是所有版本中最好的。 | 3.721 |
+| [UD2-gate-norm-q32-decay-ev](docs/variants/ud2-gate-norm-q32-decay-ev.md) | UD2-gate-norm-q32-decay 加 embedding 寫入值；兩個進步完全疊加。每層同一種 block、不用旋轉相對位置、沒有 ×1000 學習率倍數的版本中 15M 最好（1 個 seed）。 | 3.712 |
+| [UD2-gate-norm-q32-decay-half](docs/variants/ud2-gate-norm-q32-decay-half.md) | 每個 block 一半格子用 decay 的固定半衰期、一半照原本可學（×1000、softplus 門）。15M 跟 decay 一樣（1 個 seed）：全部固定就夠。 | 3.722 |
+| [UD2-gate-norm-q32-conv8](docs/variants/ud2-gate-norm-q32-conv8.md) | 不加旋轉相對位置，卷積從看 4 個 token 改成 8 個；多 13,824 個參數。15M 跟不改一樣（1 個 seed）：旋轉相對位置補的不是 4–8 個 token 內的詞序。 | 3.728 |
 
 **記憶設計**
 
