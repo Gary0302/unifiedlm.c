@@ -1,6 +1,6 @@
 # 統一性實驗報告（FineWeb-Edu，15M / 42M）
 
-截至 2026-11-16。目標是**不含 attention 的統一 block**（同一組格子同時當 FFN 和上下文記憶），在同樣的資料、步數和學習率下達到同規模 Transformer 的語言建模質量；含 attention 的版本只作對照。主線問題見 [`research_goal.md`](research_goal.md)。結果、主張和主要觀察在 [README](../README.md)。
+截至 2026-11-17。目標是**不含 attention 的統一 block**（同一組格子同時當 FFN 和上下文記憶），在同樣的資料、步數和學習率下達到同規模 Transformer 的語言建模質量；含 attention 的版本只作對照。主線問題見 [`research_goal.md`](research_goal.md)。結果、主張和主要觀察在 [README](../README.md)。
 
 每個變體一份文件（怎麼做的、程式碼在哪、結果、怎麼重現），每個實驗一份文件（問題、怎麼做的、結果表、結論）。
 
@@ -57,6 +57,14 @@
 | [UD2-gate-norm-q128-rope](variants/ud2-gate-norm-q128-rope.md) | `UD2-gate-norm-q128-rope` | 三個讀出端的修改一起：讀出 RMSNorm、秩 128 的讀位址修正、一半格子加旋轉相對位置；hidden_dim 538。 | 3.732 |
 | [UD2-gate-norm-h4q8](variants/ud2-gate-norm-h4q8.md) | `UD2-gate-norm-h4q8` | UD2-gate-norm-q32 的讀出拆成 4 個 head，每個 head 有自己秩 8 的讀位址修正、各自 RMSNorm；參數一樣。 | 3.732 |
 | [UD2-gate-mass-q32](variants/ud2-gate-mass-q32.md) | `UD2-gate-mass-q32` | UD2-gate-q32 的讀出除以位址碰到的記憶量（像 softmax 的分母）。 | 3.749 |
+| [UD2-gate-norm-q32-ropelo](variants/ud2-gate-norm-q32-ropelo.md) | `UD2-gate-norm-q32-ropelo` | UD2-gate-norm-q32-rope 只在下半的 block（15M 12 個裡的 6 個）加旋轉相對位置，上半不加；參數一樣。15M 比全部加好 0.006（1 個 seed），進步在遠處照抄；42M 跟全部加、完全不加一樣（3.171）。 | 3.711 |
+| [UD2-gate-norm-q32-rope-ev](variants/ud2-gate-norm-q32-rope-ev.md) | `UD2-gate-norm-q32-rope-ev` | UD2-gate-norm-q32-rope 的記憶寫入值加上 token embedding：v = W_v(h + g ⊙ e)，e 是 RMSNorm 過的 embedding，g 每個 channel 一個、從 0 開始；多 3,456 個參數。15M 好 0.009（1 個 seed），進步在照抄、見過的 token 和少見的詞。 | 3.707 |
+| [UD2-gate-norm-q32-ev](variants/ud2-gate-norm-q32-ev.md) | `UD2-gate-norm-q32-ev` | 不加旋轉相對位置的 UD2-gate-norm-q32 加上 embedding 寫入值（同 UD2-gate-norm-q32-rope-ev）。15M 好 0.0095（1 個 seed），跟加在有旋轉相對位置的版本上一樣。 | 3.718 |
+| [UD2-gate-norm-q32-ropelo-ev](variants/ud2-gate-norm-q32-ropelo-ev.md) | `UD2-gate-norm-q32-ropelo-ev` | 15M 目前最好（1 個 seed）。 旋轉相對位置只放下半的 block，每層都加 embedding 寫入值；兩個進步約八成六疊加。 | 3.703 |
+| [UD2-gate-norm-q32-decay](variants/ud2-gate-norm-q32-decay.md) | `UD2-gate-norm-q32-decay` | 不加旋轉相對位置；每個格子的衰減速率固定不學（buffer），g=1 時半衰期從 2 到 8,192 個 token 等比分佈，門改成 2σ（最多加速 2 倍）。哪些格子還記得就編碼了過了多久，又不會把內容轉掉。參數少 7,944 個。15M 好 0.006（1 個 seed），照抄是所有版本中最好的。 | 3.721 |
+| [UD2-gate-norm-q32-decay-ev](variants/ud2-gate-norm-q32-decay-ev.md) | `UD2-gate-norm-q32-decay-ev` | UD2-gate-norm-q32-decay 加 embedding 寫入值；兩個進步完全疊加。每層同一種 block、不用旋轉相對位置、沒有 ×1000 學習率倍數的版本中 15M 最好（1 個 seed）。 | 3.712 |
+| [UD2-gate-norm-q32-decay-half](variants/ud2-gate-norm-q32-decay-half.md) | `UD2-gate-norm-q32-decay-half` | 每個 block 一半格子用 decay 的固定半衰期、一半照原本可學（×1000、softplus 門）。15M 跟 decay 一樣（1 個 seed）：全部固定就夠。 | 3.722 |
+| [UD2-gate-norm-q32-conv8](variants/ud2-gate-norm-q32-conv8.md) | `UD2-gate-norm-q32-conv8` | 不加旋轉相對位置，卷積從看 4 個 token 改成 8 個；多 13,824 個參數。15M 跟不改一樣（1 個 seed）：旋轉相對位置補的不是 4–8 個 token 內的詞序。 | 3.728 |
 
 ### 記憶設計
 
