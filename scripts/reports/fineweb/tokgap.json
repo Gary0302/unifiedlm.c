@@ -3736,5 +3736,358 @@
     }
    }
   }
+ },
+ "tokgap15m_cp": {
+  "ref": "fw15m_t",
+  "windows": 128,
+  "L": 1024,
+  "models": {
+   "fw15m_t": "T",
+   "ud2_gate_norm_q32_rope_15m": "UD2-gate-norm-q32-rope",
+   "ud2_gate_norm_q32_ropelo_15m": "UD2-gate-norm-q32-ropelo",
+   "ud2_gate_norm_q32_rope_ev_15m": "UD2-gate-norm-q32-rope-ev"
+  },
+  "groups": {
+   "all": {
+    "tokens": 131072,
+    "share_of_tokens": 1.0,
+    "nll": {
+     "fw15m_t": 3.8932016224884003,
+     "ud2_gate_norm_q32_rope_15m": 3.691447207505937,
+     "ud2_gate_norm_q32_ropelo_15m": 3.682716315337935,
+     "ud2_gate_norm_q32_rope_ev_15m": 3.681004093595386
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.2017544149824622,
+     "ud2_gate_norm_q32_ropelo_15m": -0.21048530715046535,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.21219752889301322
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 1.0,
+     "ud2_gate_norm_q32_ropelo_15m": 1.0,
+     "ud2_gate_norm_q32_rope_ev_15m": 1.0
+    }
+   },
+   "bigram": {
+    "tokens": 26114,
+    "share_of_tokens": 0.1992340087890625,
+    "nll": {
+     "fw15m_t": 2.016759301852624,
+     "ud2_gate_norm_q32_rope_15m": 1.3981245981583283,
+     "ud2_gate_norm_q32_ropelo_15m": 1.3664491554615878,
+     "ud2_gate_norm_q32_rope_ev_15m": 1.3782990552965761
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.6186347036942959,
+     "ud2_gate_norm_q32_ropelo_15m": -0.6503101463910366,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.6384602465560483
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.6109064428838515,
+     "ud2_gate_norm_q32_ropelo_15m": 0.6155484160662559,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.5994555876187821
+    }
+   },
+   "seen": {
+    "tokens": 47206,
+    "share_of_tokens": 0.3601531982421875,
+    "nll": {
+     "fw15m_t": 3.1888590292865246,
+     "ud2_gate_norm_q32_rope_15m": 3.0407852323544273,
+     "ud2_gate_norm_q32_ropelo_15m": 3.0341325886061816,
+     "ud2_gate_norm_q32_rope_ev_15m": 3.024629511869072
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.1480737969320979,
+     "ud2_gate_norm_q32_ropelo_15m": -0.1547264406803436,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.1642295174174531
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.2643275565771138,
+     "ud2_gate_norm_q32_ropelo_15m": 0.26474637692321534,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.2787392777485556
+    }
+   },
+   "new": {
+    "tokens": 57752,
+    "share_of_tokens": 0.44061279296875,
+    "nll": {
+     "fw15m_t": 5.317405307482346,
+     "ud2_gate_norm_q32_rope_15m": 5.260275573960877,
+     "ud2_gate_norm_q32_ropelo_15m": 5.26022088690446,
+     "ud2_gate_norm_q32_rope_ev_15m": 5.258744394798939
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.05712973352146815,
+     "ud2_gate_norm_q32_ropelo_15m": -0.05718442057788412,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.0586609126834065
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.12476600053903468,
+     "ud2_gate_norm_q32_ropelo_15m": 0.11970520701052877,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.12180513463266224
+    }
+   },
+   "freq:top100": {
+    "tokens": 56785,
+    "share_of_tokens": 0.43323516845703125,
+    "nll": {
+     "fw15m_t": 2.16653761148306,
+     "ud2_gate_norm_q32_rope_15m": 2.099212441944764,
+     "ud2_gate_norm_q32_ropelo_15m": 2.0963674854488774,
+     "ud2_gate_norm_q32_rope_ev_15m": 2.098004408650741
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.06732516953829623,
+     "ud2_gate_norm_q32_ropelo_15m": -0.07017012603418236,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.06853320283231956
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.14456997716187472,
+     "ud2_gate_norm_q32_ropelo_15m": 0.14442892373166247,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.13992148649822217
+    }
+   },
+   "freq:100-1K": {
+    "tokens": 32559,
+    "share_of_tokens": 0.24840545654296875,
+    "nll": {
+     "fw15m_t": 4.178116885755331,
+     "ud2_gate_norm_q32_rope_15m": 4.000268504699593,
+     "ud2_gate_norm_q32_ropelo_15m": 3.9857127064499287,
+     "ud2_gate_norm_q32_rope_ev_15m": 3.98585878020458
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.17784838105573694,
+     "ud2_gate_norm_q32_ropelo_15m": -0.1924041793054012,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.19225810555075007
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.2189717052557115,
+     "ud2_gate_norm_q32_ropelo_15m": 0.2270669086035906,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.22506370706842296
+    }
+   },
+   "freq:1K-10K": {
+    "tokens": 37364,
+    "share_of_tokens": 0.285064697265625,
+    "nll": {
+     "fw15m_t": 5.789085351186562,
+     "ud2_gate_norm_q32_rope_15m": 5.417325746395294,
+     "ud2_gate_norm_q32_ropelo_15m": 5.4080905359661795,
+     "ud2_gate_norm_q32_rope_ev_15m": 5.400161251458882
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.3717596047912682,
+     "ud2_gate_norm_q32_ropelo_15m": -0.3809948152203827,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.3889240997276795
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.5252699882905826,
+     "ud2_gate_norm_q32_ropelo_15m": 0.515989325482622,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.5224779540391111
+    }
+   },
+   "freq:rest": {
+    "tokens": 4364,
+    "share_of_tokens": 0.033294677734375,
+    "nll": {
+     "fw15m_t": 8.002793778572745,
+     "ud2_gate_norm_q32_rope_15m": 7.329030346827911,
+     "ud2_gate_norm_q32_ropelo_15m": 7.291487265723108,
+     "ud2_gate_norm_q32_rope_ev_15m": 7.285560766799171
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.6737634317448327,
+     "ud2_gate_norm_q32_ropelo_15m": -0.7113065128496359,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.717233011773573
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.11118832929183121,
+     "ud2_gate_norm_q32_ropelo_15m": 0.11251484218212492,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.11253685239424376
+    }
+   },
+   "bigram@0-64": {
+    "tokens": 356,
+    "share_of_tokens": 0.002716064453125,
+    "nll": {
+     "fw15m_t": 1.4948259318124646,
+     "ud2_gate_norm_q32_rope_15m": 0.9339756296785402,
+     "ud2_gate_norm_q32_ropelo_15m": 0.9375181200699403,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.900268901487354
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.5608503021339244,
+     "ud2_gate_norm_q32_ropelo_15m": -0.5573078117425242,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.5945570303251106
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.007550296082902493,
+     "ud2_gate_norm_q32_ropelo_15m": 0.007191399520540848,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.007610150899710907
+    }
+   },
+   "bigram@64-256": {
+    "tokens": 3573,
+    "share_of_tokens": 0.02725982666015625,
+    "nll": {
+     "fw15m_t": 1.7699849176835956,
+     "ud2_gate_norm_q32_rope_15m": 1.1702070426247368,
+     "ud2_gate_norm_q32_ropelo_15m": 1.1495763967394497,
+     "ud2_gate_norm_q32_rope_ev_15m": 1.1559494394358065
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.5997778750588587,
+     "ud2_gate_norm_q32_ropelo_15m": -0.6204085209441458,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.6140354782477889
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.08103833023987393,
+     "ud2_gate_norm_q32_ropelo_15m": 0.08034873772605719,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.07888169474706828
+    }
+   },
+   "bigram@256-1024": {
+    "tokens": 22185,
+    "share_of_tokens": 0.16925811767578125,
+    "nll": {
+     "fw15m_t": 2.064878894116326,
+     "ud2_gate_norm_q32_rope_15m": 1.442279949012524,
+     "ud2_gate_norm_q32_ropelo_15m": 1.4082605512476425,
+     "ud2_gate_norm_q32_rope_ev_15m": 1.4217804126202906
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.6225989451038026,
+     "ud2_gate_norm_q32_ropelo_15m": -0.6566183428686841,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.6430984814960359
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.5223178165610751,
+     "ud2_gate_norm_q32_ropelo_15m": 0.5280082788196578,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.512963741972003
+    }
+   },
+   "seen@0-64": {
+    "tokens": 1405,
+    "share_of_tokens": 0.01071929931640625,
+    "nll": {
+     "fw15m_t": 2.4180869130010043,
+     "ud2_gate_norm_q32_rope_15m": 2.323914780295777,
+     "ud2_gate_norm_q32_ropelo_15m": 2.3036730818571423,
+     "ud2_gate_norm_q32_rope_ev_15m": 2.312081488703951
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.09417213270522727,
+     "ud2_gate_norm_q32_ropelo_15m": -0.11441383114386204,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.10600542429705347
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.005003406135223411,
+     "ud2_gate_norm_q32_ropelo_15m": 0.00582670647453365,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.005354934518467776
+    }
+   },
+   "seen@64-256": {
+    "tokens": 7931,
+    "share_of_tokens": 0.06050872802734375,
+    "nll": {
+     "fw15m_t": 2.894944760767793,
+     "ud2_gate_norm_q32_rope_15m": 2.7419554180869214,
+     "ud2_gate_norm_q32_ropelo_15m": 2.744793842133324,
+     "ud2_gate_norm_q32_rope_ev_15m": 2.726959294818334
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.15298934268087172,
+     "ud2_gate_norm_q32_ropelo_15m": -0.15015091863446894,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.16798546594945893
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.04588345949288721,
+     "ud2_gate_norm_q32_ropelo_15m": 0.043164253228441155,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.04790153271203858
+    }
+   },
+   "seen@256-1024": {
+    "tokens": 37870,
+    "share_of_tokens": 0.2889251708984375,
+    "nll": {
+     "fw15m_t": 3.279008722632266,
+     "ud2_gate_norm_q32_rope_15m": 3.1299645891565926,
+     "ud2_gate_norm_q32_ropelo_15m": 3.121828421858324,
+     "ud2_gate_norm_q32_rope_ev_15m": 3.113405652982787
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.14904413347567402,
+     "ud2_gate_norm_q32_ropelo_15m": -0.15718030077394246,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.16560306964947905
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.2134406909490032,
+     "ud2_gate_norm_q32_ropelo_15m": 0.21575541722024055,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.22548281051804925
+    }
+   },
+   "new@0-64": {
+    "tokens": 6431,
+    "share_of_tokens": 0.04906463623046875,
+    "nll": {
+     "fw15m_t": 4.733388845027445,
+     "ud2_gate_norm_q32_rope_15m": 4.632928990773455,
+     "ud2_gate_norm_q32_ropelo_15m": 4.628728074492268,
+     "ud2_gate_norm_q32_rope_ev_15m": 4.633588477186774
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.10045985425398936,
+     "ud2_gate_norm_q32_ropelo_15m": -0.10466077053517692,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.09980036784067077
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.0244308220227367,
+     "ud2_gate_norm_q32_ropelo_15m": 0.024396679765577002,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.0230759932470199
+    }
+   },
+   "new@64-256": {
+    "tokens": 13072,
+    "share_of_tokens": 0.0997314453125,
+    "nll": {
+     "fw15m_t": 5.113305895636661,
+     "ud2_gate_norm_q32_rope_15m": 5.06176904466612,
+     "ud2_gate_norm_q32_ropelo_15m": 5.060263710869576,
+     "ud2_gate_norm_q32_rope_ev_15m": 5.058646419506415
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.05153685097054201,
+     "ud2_gate_norm_q32_ropelo_15m": -0.0530421847670858,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.05465947613024699
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.02547574800082497,
+     "ud2_gate_norm_q32_ropelo_15m": 0.0251322708504903,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.025689594892700535
+    }
+   },
+   "new@256-1024": {
+    "tokens": 38249,
+    "share_of_tokens": 0.29181671142578125,
+    "nll": {
+     "fw15m_t": 5.485352113456206,
+     "ud2_gate_norm_q32_rope_15m": 5.433596268029202,
+     "ud2_gate_norm_q32_ropelo_15m": 5.434734481554016,
+     "ud2_gate_norm_q32_rope_ev_15m": 5.432240654549199
+    },
+    "minus_ref": {
+     "ud2_gate_norm_q32_rope_15m": -0.05175584542700457,
+     "ud2_gate_norm_q32_ropelo_15m": -0.05061763190219079,
+     "ud2_gate_norm_q32_rope_ev_15m": -0.05311145890700802
+    },
+    "share_of_gap": {
+     "ud2_gate_norm_q32_rope_15m": 0.074859430515473,
+     "ud2_gate_norm_q32_ropelo_15m": 0.07017625639446146,
+     "ud2_gate_norm_q32_rope_ev_15m": 0.0730395464929418
+    }
+   }
+  }
  }
 }
