@@ -425,7 +425,7 @@ def embed_value_forward(self, tokens, targets=None):
     h = self.dropout(self.tok_embeddings(tokens))
     e = h * torch.rsqrt(h.square().mean(-1, keepdim=True) + 1e-6)
     for layer in self.layers:
-        h = layer(h, e) if isinstance(layer, (EmbedValueRopeReadNormQueryGateAnchorDeltaBlock, EmbedValueReadNormQueryGateAnchorDeltaBlock)) else layer(h)
+        h = layer(h, e) if hasattr(layer, "ev_gain") else layer(h)
     h = self.norm(h)
     if targets is not None:
         logits = self.output(h)
@@ -474,6 +474,41 @@ class SpectrumReadNormQueryGateAnchorDeltaBlock(ReadNormQueryGateAnchorDeltaBloc
         rn = r * torch.rsqrt(r.square().mean(-1, keepdim=True) + 1e-12)
         g = 2.0 * torch.sigmoid(_hi(self.gate_p(self.gate_q(rn))))
         return torch.expm1(-self.log_rate.exp() * g)
+
+
+class EmbedValueSpectrumReadNormQueryGateAnchorDeltaBlock(SpectrumReadNormQueryGateAnchorDeltaBlock):
+    """UD2-gate-norm-q32-decay-ev: UD2-gate-norm-q32-decay with -rope-ev's write value v_t = W_v (h_t + g * e_t), the
+    same forward and the same per-channel gain started at 0 (the block starts as UD2-gate-norm-q32-decay). At 15M decay
+    helped copying and new tokens but not seen ones, and -ev's gain was mostly on seen and rare tokens."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.ev_gain = nn.Parameter(torch.zeros(args.dim))
+
+    forward = EmbedValueRopeReadNormQueryGateAnchorDeltaBlock.forward
+
+
+class HalfSpectrumReadNormQueryGateAnchorDeltaBlock(ReadNormQueryGateAnchorDeltaBlock):
+    """UD2-gate-norm-q32-decay-half: the first half of each block's slots as in UD2-gate-norm-q32-decay (fixed
+    half-lives log-spaced over DECAY_HALF_LIVES, bounded gate 2 sigmoid(.)), the second half as in UD2-gate-norm-q32
+    (rates learned at 1000x from 1/(4 L), softplus gate): fixed fast-and-slow slots in every block next to slots each
+    block can still move as a whole. At 15M decay helped copying and new tokens but not seen ones."""
+
+    def __init__(self, args):
+        super().__init__(args)
+        m = args.hidden_dim
+        self.m_fixed = m // 2
+        H = torch.logspace(math.log10(DECAY_HALF_LIVES[0]), math.log10(DECAY_HALF_LIVES[1]), self.m_fixed, dtype=torch.float64)
+        self.register_buffer("log_rate_fixed", torch.log(-torch.log1p(-math.log(2.0) / H)).float())
+        self.log_rate_s = nn.Parameter(self.log_rate_s.detach()[self.m_fixed:].clone())   # learned rates, second half only
+
+    def log_decay(self, r):
+        rn = r * torch.rsqrt(r.square().mean(-1, keepdim=True) + 1e-12)
+        p = _hi(self.gate_p(self.gate_q(rn)))
+        k = self.m_fixed
+        fixed = torch.expm1(-self.log_rate_fixed.exp() * (2.0 * torch.sigmoid(p[..., :k])))
+        learned = torch.expm1(-self.log_rate.exp() * (F.softplus(p[..., k:]) / math.log(2.0)))
+        return torch.cat([fixed, learned], -1)
 
 
 class MultiHeadReadNormGateAnchorDeltaBlock(ReadNormGateAnchorDeltaBlock):
