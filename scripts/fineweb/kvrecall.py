@@ -6,7 +6,7 @@ shard (as copyprobe.py's random probe). In the second part each value v follows 
 the order shuffled, the only way to predict v is to find k in the first part and read what came after it.
 N = 8, 16, 32, 64, 128, 256 (4N tokens, at most 1024, the training length).
 Per model and N: mean NLL and top-1 accuracy on the recalled values; NLL on the values of the first part (nothing
-points at them, about ln 4,950 = 8.5: the no-recall reference); recall accuracy by distance from the first
+points at them: the no-recall reference, above ln 4,950 = 8.5 since a text model is no uniform guesser); recall accuracy by distance from the first
 occurrence of the pair. Prints JSON and writes kvrecall.json into --dest. Run from the repo root:
 
 $ python scripts/fineweb/kvrecall.py --runs <run> [<run> ...] --dest=<dir>
