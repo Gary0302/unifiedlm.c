@@ -485,6 +485,7 @@ def install(variant, m_s=0, m_f=0):
         i = itertools.count()
         model.UnifiedBlock = lambda args: GatedDeltaNet2Half(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
     elif variant == "QHybrid":  # baseline: the Qwen3-Next / 3.5 / 3.6 layout, 3 GDN halves then 1 gated attention half, each before a SwiGLU half
+        import delta
         i = itertools.count()
 
         def block(args):
