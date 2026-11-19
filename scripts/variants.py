@@ -160,6 +160,32 @@ class WindowAttentionHalf(AttentionHalf):
         return x + self.dropout(self.mu(y.transpose(1, 2).reshape(B, T, d)))
 
 
+class GatedAttentionHalf(nn.Module):
+    """The attention half of the Qwen3-Next / Qwen3.5 / Qwen3.6 hybrids: gated attention (Qiu et al. 2025,
+    arXiv 2505.06708), a sigmoid gate per head channel on the attention output, y * sigmoid(W_g h), before the
+    output projection; grouped-query attention with kv_heads key/value heads; RMSNorm on each q and k head
+    (Qwen3's QK-norm); full RoPE as in AttentionHalf (the Qwen hybrids rotate part of each head)."""
+
+    def __init__(self, args, kv_heads=2):
+        super().__init__()
+        d = args.dim
+        self.h, self.kv = d // HEAD_DIM, kv_heads
+        self.norm = RMSNorm(d, eps=args.norm_eps)
+        self.wq, self.wg, self.mu = (nn.Linear(d, d, bias=False) for _ in range(3))
+        self.wk, self.wv = (nn.Linear(d, kv_heads * HEAD_DIM, bias=False) for _ in range(2))
+        self.qnorm, self.knorm = RMSNorm(HEAD_DIM, eps=args.norm_eps), RMSNorm(HEAD_DIM, eps=args.norm_eps)
+        self.dropout = nn.Dropout(args.dropout)
+
+    def forward(self, x):
+        B, T, d = x.shape
+        a = self.norm(x)
+        q = self.qnorm(self.wq(a).view(B, T, self.h, HEAD_DIM)).transpose(1, 2)
+        k, v = (w(a).view(B, T, self.kv, HEAD_DIM) for w in (self.wk, self.wv))
+        k, v = (z.transpose(1, 2).repeat_interleave(self.h // self.kv, 1) for z in (self.knorm(k), v))
+        y = F.scaled_dot_product_attention(_rope(q), _rope(k), v, is_causal=True)
+        return x + self.dropout(self.mu(y.transpose(1, 2).reshape(B, T, d) * torch.sigmoid(self.wg(a))))
+
+
 class GatedDeltaHalf(nn.Module):
     """Gated DeltaNet (Yang, Kautz, Hatamizadeh, ICLR 2025, arXiv 2412.06464) in place of attention: the GDN
     baseline, a recurrent (SSM-family) Transformer. Per head, with unit q_t, k_t (q also scaled by 1/sqrt(dk)):
@@ -458,6 +484,16 @@ def install(variant, m_s=0, m_f=0):
         import delta
         i = itertools.count()
         model.UnifiedBlock = lambda args: GatedDeltaNet2Half(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
+    elif variant == "QHybrid":  # baseline: the Qwen3-Next / 3.5 / 3.6 layout, 3 GDN halves then 1 gated attention half, each before a SwiGLU half
+        import delta
+        i = itertools.count()
+
+        def block(args):
+            n = next(i)
+            if n % 2:
+                return FeedForwardHalf(args)
+            return GatedAttentionHalf(args) if (n // 2) % 4 == 3 else GatedDeltaHalf(args)
+        model.UnifiedBlock = block
     elif variant == "T":
         i = itertools.count()
         model.UnifiedBlock = lambda args: AttentionHalf(args) if next(i) % 2 == 0 else FeedForwardHalf(args)
